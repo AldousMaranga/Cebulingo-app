@@ -1,0 +1,3302 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>CebuLingo - Learn Cebuano</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBTTlt-ikZafNb2kB734_XAKZiVZPukCGI",
+            authDomain: "cebu-lingo.firebaseapp.com",
+            projectId: "cebu-lingo",
+            storageBucket: "cebu-lingo.firebasestorage.app",
+            messagingSenderId: "612302988002",
+            appId: "1:612302988002:web:05654c34d286a34d5e74bb",
+            measurementId: "G-15GWYKRB05"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const googleProvider = new firebase.auth.GoogleAuthProvider();
+    </script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+/* Reset and Base */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: 'Fredoka', sans-serif;
+    background-color: #1C1C1C;
+    color: white;
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+#app {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background-color: #1C1C1C;
+}
+
+#content-container {
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background-color: #1C1C1C;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Utility Classes */
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.flex-1 { flex: 1; }
+.items-center { align-items: center; }
+.items-start { align-items: flex-start; }
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.justify-end { justify-content: flex-end; }
+.gap-1 { gap: 0.25rem; }
+.gap-2 { gap: 0.5rem; }
+.gap-3 { gap: 0.75rem; }
+.gap-4 { gap: 1rem; }
+.gap-6 { gap: 1.5rem; }
+.gap-8 { gap: 2rem; }
+.space-y-2 > * + * { margin-top: 0.5rem; }
+.space-y-3 > * + * { margin-top: 0.75rem; }
+.space-y-4 > * + * { margin-top: 1rem; }
+.space-y-6 > * + * { margin-top: 1.5rem; }
+.space-y-8 > * + * { margin-top: 2rem; }
+.w-full { width: 100%; }
+.h-full { height: 100%; }
+.max-w-md { max-width: 28rem; }
+.max-w-lg { max-width: 32rem; }
+.max-w-2xl { max-width: 42rem; }
+.mx-auto { margin-left: auto; margin-right: auto; }
+.mb-1 { margin-bottom: 0.25rem; }
+.mb-2 { margin-bottom: 0.5rem; }
+.mb-3 { margin-bottom: 0.75rem; }
+.mb-4 { margin-bottom: 1rem; }
+.mb-6 { margin-bottom: 1.5rem; }
+.mb-8 { margin-bottom: 2rem; }
+.mb-12 { margin-bottom: 3rem; }
+.mt-2 { margin-top: 0.5rem; }
+.mt-4 { margin-top: 1rem; }
+.mt-6 { margin-top: 1.5rem; }
+.mt-8 { margin-top: 2rem; }
+.p-3 { padding: 0.75rem; }
+.p-4 { padding: 1rem; }
+.p-6 { padding: 1.5rem; }
+.p-8 { padding: 2rem; }
+.px-4 { padding-left: 1rem; padding-right: 1rem; }
+.px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
+.px-8 { padding-left: 2rem; padding-right: 2rem; }
+.py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+.py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+.py-4 { padding-top: 1rem; padding-bottom: 1rem; }
+.py-6 { padding-top: 1.5rem; padding-bottom: 1.5rem; }
+.py-8 { padding-top: 2rem; padding-bottom: 2rem; }
+.py-12 { padding-top: 3rem; padding-bottom: 3rem; }
+.rounded-xl { border-radius: 0.75rem; }
+.rounded-2xl { border-radius: 1rem; }
+.rounded-full { border-radius: 9999px; }
+.text-center { text-align: center; }
+.text-white { color: white; }
+.overflow-hidden { overflow: hidden; }
+.overflow-y-auto { overflow-y: auto; }
+.relative { position: relative; }
+.absolute { position: absolute; }
+.sticky { position: sticky; }
+.top-0 { top: 0; }
+.inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
+.z-10 { z-index: 10; }
+.z-20 { z-index: 20; }
+.border-b { border-bottom: 1px solid #2A2A2A; }
+.grid { display: grid; }
+.grid-2 { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+.grid-3 { grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+.grid-4 { grid-template-columns: repeat(4, 1fr); gap: 0.5rem; }
+.grid-1 { grid-template-columns: 1fr; gap: 1rem; }
+.opacity-50 { opacity: 0.5; }
+.pointer-events-none { pointer-events: none; }
+
+/* Component Styles for CebuLingo */
+
+/* Button Styles */
+.btn {
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 1rem;
+    padding: 0.75rem 1.5rem;
+}
+
+.btn:hover {
+    transform: scale(1.02);
+}
+
+.btn:active {
+    transform: scale(0.98);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #1A73E8 0%, #6BB6FF 100%);
+    color: white;
+    box-shadow: 0 4px 20px rgba(26, 115, 232, 0.4);
+}
+
+.btn-secondary {
+    background-color: #2A2A2A;
+    border: 2px solid #3A3A3A;
+    color: white;
+}
+
+.btn-small {
+    padding: 0.5rem 1rem;
+    border-radius: 0.75rem;
+}
+
+.btn-icon {
+    background-color: #2A2A2A;
+    padding: 0.75rem;
+    border-radius: 0.75rem;
+    transition: all 0.3s ease;
+}
+
+.btn-icon:hover {
+    transform: scale(1.1);
+}
+
+/* Input Styles */
+.input {
+    font-family: 'Fredoka', sans-serif;
+    background-color: #2A2A2A;
+    border: 2px solid #3A3A3A;
+    color: white;
+    padding: 1rem;
+    border-radius: 1rem;
+    width: 100%;
+    font-size: 16px;
+    transition: all 0.3s ease;
+}
+
+.input:focus {
+    outline: none;
+    border-color: #1A73E8;
+    box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.2);
+}
+
+.input::placeholder {
+    color: #BEBEBE;
+}
+
+/* Card Styles */
+.card {
+    background-color: #2A2A2A;
+    border-radius: 1rem;
+    padding: 1.5rem;
+}
+
+/* Progress Bar */
+.progress-bar {
+    width: 100%;
+    height: 8px;
+    background-color: #2A2A2A;
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #1A73E8 0%, #6BB6FF 100%);
+    border-radius: 999px;
+    transition: width 0.3s ease;
+}
+
+/* Image Card */
+.image-card {
+    border-radius: 1rem;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    background-color: #2A2A2A;
+}
+
+.image-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.image-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.image-card.selected {
+    ring: 4px;
+    ring-color: #1A73E8;
+    box-shadow: 0 0 0 4px #1A73E8;
+}
+
+.image-card.correct {
+    box-shadow: 0 0 0 4px #10B981;
+}
+
+.image-card.incorrect {
+    box-shadow: 0 0 0 4px #EF4444;
+}
+
+/* Sparkle Effect */
+.sparkle {
+    position: absolute;
+    pointer-events: none;
+    width: 20px;
+    height: 20px;
+    animation: sparkle 2s ease-in-out infinite;
+}
+
+/* Utility Classes */
+.text-gradient-blue {
+    background: linear-gradient(135deg, #1A73E8 0%, #6BB6FF 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.shadow-glow-blue {
+    box-shadow: 0 8px 32px rgba(26, 115, 232, 0.4);
+}
+
+.hidden {
+    display: none !important;
+}
+
+.screen {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.screen.active {
+    opacity: 1;
+    pointer-events: all;
+}
+
+/* Mobile responsive utilities */
+@media (max-width: 768px) {
+    .desktop-only {
+        display: none !important;
+    }
+}
+
+@media (min-width: 769px) {
+    .mobile-only {
+        display: none !important;
+    }
+}
+
+/* Desktop mode */
+.desktop-mode #content-container {
+    max-width: 1200px;
+    border-radius: 0.5rem;
+}
+
+/* Loading Spinner */
+.spinner {
+    border: 3px solid #2A2A2A;
+    border-top: 3px solid #1A73E8;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Cow Mascot Container */
+.cow-container {
+    display: inline-block;
+}
+
+/* Modal Overlay */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal {
+    background-color: #2A2A2A;
+    border-radius: 1rem;
+    padding: 2rem;
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+/* Table Styles */
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+table th,
+table td {
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 1px solid #3A3A3A;
+}
+
+table th {
+    color: #6BB6FF;
+    font-weight: 600;
+}
+
+table td {
+    color: white;
+}
+
+table tr:hover {
+    background-color: rgba(26, 115, 232, 0.1);
+}
+
+/* Badge */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 0.75rem;
+    background-color: #2A2A2A;
+    font-size: 14px;
+}
+
+/* Grid Layouts */
+.grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+.grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+
+.grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+}
+
+/* Podium */
+.podium {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 1rem;
+    margin: 2rem 0;
+}
+
+.podium-place {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.podium-block {
+    width: 80px;
+    border-radius: 0.5rem 0.5rem 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.podium-block.first {
+    height: 120px;
+    background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+}
+
+.podium-block.second {
+    height: 90px;
+    background: linear-gradient(135deg, #C0C0C0 0%, #808080 100%);
+}
+
+.podium-block.third {
+    height: 70px;
+    background: linear-gradient(135deg, #CD7F32 0%, #8B4513 100%);
+}
+
+/* Lesson Node */
+.lesson-node {
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.lesson-node:hover:not(.locked) {
+    transform: scale(1.1);
+}
+
+.lesson-node.locked {
+    cursor: default;
+    opacity: 0.5;
+}
+
+.lesson-node.current {
+    animation: pulse 2s ease-in-out infinite;
+    box-shadow: 0 0 0 4px rgba(255, 215, 0, 0.5);
+}
+
+@keyframes pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 4px rgba(255, 215, 0, 0.5);
+    }
+    50% {
+        box-shadow: 0 0 0 8px rgba(255, 215, 0, 0.3);
+    }
+}
+
+/* Achievement Card */
+.achievement {
+    background-color: #2A2A2A;
+    border-radius: 1rem;
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.achievement.locked {
+    opacity: 0.5;
+}
+
+.achievement-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+}
+
+/* Stat Card */
+.stat-card {
+    background-color: #2A2A2A;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    text-align: center;
+}
+
+.stat-value {
+    font-size: 32px;
+    font-weight: 700;
+    color: #1A73E8;
+}
+
+.stat-label {
+    font-size: 14px;
+    color: #BEBEBE;
+    margin-top: 0.5rem;
+}
+
+/* =============================================
+   Missing Tailwind-style utility classes
+   Used in JS-generated innerHTML throughout
+   ============================================= */
+
+/* --- Bracket-notation color classes --- */
+.text-\[\#BEBEBE\] { color: #BEBEBE; }
+.text-\[\#6BB6FF\] { color: #6BB6FF; }
+.text-\[\#94A3B8\] { color: #94A3B8; }
+.text-gray-600 { color: #4B5563; }
+.border-\[\#2A2A2A\] { border-color: #2A2A2A; }
+.border-\[\#1E293B\] { border-color: #1E293B; }
+.bg-\[\#1E293B\] { background-color: #1E293B; }
+
+/* --- Sizing classes --- */
+.w-12 { width: 3rem; }
+.h-12 { height: 3rem; }
+.w-16 { width: 4rem; }
+.h-16 { height: 4rem; }
+.w-24 { width: 6rem; }
+.h-24 { height: 6rem; }
+.w-32 { width: 8rem; }
+.h-32 { height: 8rem; }
+.w-20 { width: 5rem; }
+.h-20 { height: 5rem; }
+.w-28 { width: 7rem; }
+.h-28 { height: 7rem; }
+.w-64 { width: 16rem; }
+.h-screen { height: 100vh; }
+.border-r { border-right: 1px solid; }
+
+/* --- Spacing extras --- */
+.p-2\.5 { padding: 0.625rem; }
+.px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+.py-1\.5 { padding-top: 0.375rem; padding-bottom: 0.375rem; }
+.px-16 { padding-left: 4rem; padding-right: 4rem; }
+.py-16 { padding-top: 4rem; padding-bottom: 4rem; }
+.mb-16 { margin-bottom: 4rem; }
+.mb-12 { margin-bottom: 3rem; }
+.mt-12 { margin-top: 3rem; }
+.-top-20 { top: -5rem; }
+.left-1\/2 { left: 50%; }
+.gap-16 { gap: 4rem; }
+
+/* --- Transform --- */
+.transform { transform: translate(var(--tw-translate-x, 0), var(--tw-translate-y, 0)); }
+.-translate-x-1\/2 { transform: translateX(-50%); }
+
+/* --- Text sizes --- */
+.text-4xl { font-size: 2.25rem; line-height: 2.5rem; }
+.text-5xl { font-size: 3rem; line-height: 1; }
+
+/* --- Border & shadow --- */
+.rounded-lg { border-radius: 0.5rem; }
+.shadow-2xl { box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); }
+.border-2 { border-width: 2px; border-style: solid; }
+
+/* --- Transition & duration --- */
+.transition-all { transition: all 0.3s ease; }
+.duration-300 { transition-duration: 300ms; }
+
+/* --- Hover effects --- */
+.hover\:scale-\[1\.02\]:hover { transform: scale(1.02); }
+.hover\:scale-105:hover { transform: scale(1.05); }
+.hover\:scale-110:hover { transform: scale(1.1); }
+.hover\:bg-\[\#1E293B\]:hover { background-color: #1E293B; }
+
+/* --- Flex layout extras --- */
+.flex-row { flex-direction: row; }
+
+/* =============================================
+   Animations (cow mascot, sparkle, UI elements)
+   ============================================= */
+
+@keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+}
+.animate-float { animation: float 3s ease-in-out infinite; }
+
+@keyframes bounce-gentle {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+}
+.animate-bounce-gentle { animation: bounce-gentle 2s ease-in-out infinite; }
+
+@keyframes wave {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-15deg); }
+    75% { transform: rotate(15deg); }
+}
+.animate-wave { animation: wave 1.5s ease-in-out infinite; }
+
+@keyframes wiggle {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-5deg); }
+    75% { transform: rotate(5deg); }
+}
+.animate-wiggle { animation: wiggle 2s ease-in-out infinite; }
+
+@keyframes wag {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(10deg); }
+    75% { transform: rotate(-10deg); }
+}
+.animate-wag { animation: wag 1s ease-in-out infinite; }
+
+@keyframes blink {
+    0%, 90%, 100% { transform: scaleY(1); }
+    95% { transform: scaleY(0.1); }
+}
+.animate-blink { animation: blink 4s ease-in-out infinite; }
+
+@keyframes celebrate-left {
+    0%, 100% { transform: rotate(0deg) translateY(0); }
+    50% { transform: rotate(-20deg) translateY(-10px); }
+}
+.animate-celebrate-left { animation: celebrate-left 0.8s ease-in-out infinite; }
+
+@keyframes celebrate-right {
+    0%, 100% { transform: rotate(0deg) translateY(0); }
+    50% { transform: rotate(20deg) translateY(-10px); }
+}
+.animate-celebrate-right { animation: celebrate-right 0.8s ease-in-out infinite; }
+
+@keyframes sparkle {
+    0%, 100% { opacity: 0; transform: scale(0) rotate(0deg); }
+    50% { opacity: 1; transform: scale(1) rotate(180deg); }
+}
+
+/* =============================================
+   Mobile-first responsive layout
+   ============================================= */
+
+/* Full viewport on mobile — no rigid iPhone dimensions */
+@media (max-width: 768px) {
+    #app {
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh; /* dynamic viewport height for mobile browsers */
+    }
+
+    #content-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        height: 100% !important;
+        max-height: 100% !important;
+        border-radius: 0 !important;
+    }
+
+    body {
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+    }
+}
+
+/* Desktop centering */
+@media (min-width: 769px) {
+    #app {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+    }
+}
+
+
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div id="content-container"></div>
+    </div>
+    <script>
+// CebuLingo App - Main Application Logic
+// Pure JavaScript implementation
+
+// App State
+const AppState = {
+    currentScreen: 'main-menu',
+    screenHistory: [],
+    isMobile: true,
+    userData: {
+        name: 'Language Learner',
+        streak: 28,
+        totalXP: 2580,
+        currentLevel: 3,
+        completedLessons: []
+    },
+    lessonData: {
+        currentScore: 0,
+        totalQuestions: 0,
+        wrongQuestions: []
+    }
+};
+
+// Local Storage Management
+const Storage = {
+    save(key, data) {
+        localStorage.setItem(`cebulingo_${key}`, JSON.stringify(data));
+    },
+    load(key) {
+        const data = localStorage.getItem(`cebulingo_${key}`);
+        return data ? JSON.parse(data) : null;
+    },
+    clear(key) {
+        localStorage.removeItem(`cebulingo_${key}`);
+    }
+};
+
+// Initialize App
+function initApp() {
+    // Load saved data
+    const savedUserData = Storage.load('userData');
+    if (savedUserData) {
+        AppState.userData = { ...AppState.userData, ...savedUserData };
+    }
+
+    // Apply mobile mode
+    updateViewMode();
+
+    // Show loading splash while checking auth
+    renderLoadingSplash();
+
+    // Listen for Firebase auth state — first call determines routing
+    let firstCheck = true;
+    auth.onAuthStateChanged((user) => {
+        if (firstCheck) {
+            firstCheck = false;
+            if (user) {
+                // User is logged in — sync data and go to dashboard
+                AppState.userData.name = user.displayName || AppState.userData.name;
+                AppState.userData.email = user.email || '';
+                AppState.userData.photoURL = user.photoURL || '';
+                AppState.userData.uid = user.uid;
+                Storage.save('userData', AppState.userData);
+
+                // Fetch extra data from Firestore
+                db.collection('users').doc(user.uid).get()
+                    .then((doc) => {
+                        if (doc.exists) {
+                            const data = doc.data();
+                            AppState.userData.streak = data.streak || AppState.userData.streak;
+                            AppState.userData.totalXP = data.totalXP || AppState.userData.totalXP;
+                            AppState.userData.currentLevel = data.currentLevel || AppState.userData.currentLevel;
+                            AppState.userData.completedLessons = data.completedLessons || AppState.userData.completedLessons;
+                            Storage.save('userData', AppState.userData);
+                        }
+                        navigateTo('dashboard');
+                    })
+                    .catch(() => navigateTo('dashboard'));
+            } else {
+                // No user — show login flow
+                navigateTo('main-menu');
+            }
+        }
+    });
+}
+
+// Loading splash screen
+function renderLoadingSplash() {
+    const container = document.getElementById('content-container');
+    container.innerHTML = '';
+    const splash = createElement('div', 'flex flex-col items-center justify-center h-full');
+    splash.style.cssText = 'background: radial-gradient(ellipse at 50% 30%, #1a2332 0%, #0d1117 100%);';
+    splash.innerHTML = `
+        <div style="animation: float 2s ease-in-out infinite;">
+            <div style="font-size: 64px; margin-bottom: 1rem;">\uD83D\uDC2E</div>
+        </div>
+        <h1 style="font-size: 32px; font-weight: 700; background: linear-gradient(135deg, #fff 0%, #6BB6FF 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">CebuLingo</h1>
+        <div class="spinner" style="margin-top: 2rem;"></div>
+    `;
+    container.appendChild(splash);
+}
+
+// View Mode Management
+function updateViewMode() {
+    const app = document.getElementById('app');
+    const container = document.getElementById('content-container');
+    app.classList.remove('desktop-mode');
+    container.className = '';
+    container.style.cssText = 'width: 100%; height: 100vh; height: 100dvh; position: relative; overflow-y: auto; overflow-x: hidden; background-color: #1C1C1C; -webkit-overflow-scrolling: touch;';
+}
+
+
+// Utility Functions
+function capitalize(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+// Reusable Bottom Navigation helper
+function createBottomNav(activeTab) {
+    const bottomNav = createElement('div', 'fixed z-30');
+    bottomNav.id = 'bottom-nav-bar';
+    bottomNav.style.cssText = 'bottom: 0; left: 0; right: 0; padding: 0.5rem 1rem; padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));';
+
+    const navBar = createElement('div', 'flex items-center justify-around');
+    navBar.style.cssText = 'background: rgba(22,22,22,0.92); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-radius: 1.25rem; padding: 0.5rem 0.25rem; border: 1px solid rgba(255,255,255,0.06); box-shadow: 0 -4px 20px rgba(0,0,0,0.3);';
+
+    const navItems = [
+        { id: 'dashboard', icon: 'layout-dashboard', label: 'Dashboard', action: () => navigateTo('dashboard') },
+        { id: 'leaderboard', icon: 'trophy', label: 'Ranks', action: () => navigateTo('leaderboard') },
+        { id: 'modules', icon: 'book-open', label: 'Modules', action: () => navigateTo('modules') },
+        { id: 'profile', icon: 'user', label: 'Profile', action: () => navigateTo('profile') }
+    ];
+
+    navItems.forEach(item => {
+        const isActive = item.id === activeTab;
+        const navBtn = createElement('button', 'flex flex-col items-center gap-1');
+        navBtn.style.cssText = `border: none; cursor: pointer; padding: 0.45rem 0.85rem; border-radius: 0.75rem; background: ${isActive ? 'linear-gradient(135deg, #1A73E8 0%, #4DACFF 100%)' : 'transparent'}; transition: all 0.2s ease;`;
+        navBtn.innerHTML = `
+            <i data-lucide="${item.icon}" style="width: 20px; height: 20px; color: ${isActive ? 'white' : '#8899aa'};"></i>
+            <span style="font-size: 10px; color: ${isActive ? 'white' : '#8899aa'}; font-weight: 500;">${item.label}</span>
+        `;
+        navBtn.onclick = (e) => {
+            if (isActive) return;
+            item.action();
+        };
+        navBar.appendChild(navBtn);
+    });
+
+    bottomNav.appendChild(navBar);
+    return bottomNav;
+}
+
+function createElement(tag, className, styles = {}) {
+    const element = document.createElement(tag);
+    if (className) element.className = className;
+    Object.assign(element.style, styles);
+    return element;
+}
+
+function clearContainer() {
+    const container = document.getElementById('content-container');
+    container.innerHTML = '';
+}
+
+// Sound Effects
+const SoundEffects = {
+    playCorrect() {
+        const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTGH0fPTgjMGHm7A7+OZSA0PVK3m7KlcFQxBouLyvHAjBjiO1vPOeSsFJHnI8d2RQwoUX7Xq66tYFApGnt/yvWsgBDGH0fPTgjMGHm7A7+OZSA0PVK3m7KlcFQxBouLyvHAjBjiO1vPOeSsFJHnI8d2RQwoUX7Xq66tYFApGnt/yvWsgBDGH0fPTgjMGHm7A7+OZSA0PVK3m7KlcFQxBouLyvHAjBjiO1vPOeSsFJHnI8d2RQwoUX7Xq66tYFApGnt/yvWsgBDGH0fPTgjMGHm7A7+OZSA0PVK3m7KlcFQxBouLyvHAjBjiO1vPOeSsFJHnI8d2RQwoUX7Xq66tYFApGnt/yvWsgBDGH0fPTgjMGHm7A7+OZSA0PVK3m7KlcFQxBouLyvHAjBjiO1vPOeSsFJHnI8d2RQwoUX7Xq66tYFApGnt/yvWsgBDGH0fPTgjMGHm7A7+OZSA0PVK3m7KlcFQxBouLyvHAjBjiO1vPOeSsFJHnI8d2RQwoUX7Xq66tYFApGnt/yvWsgBDGH0fPTgjMGHm7A7+OZSA0PVK3m7KlcFQxBouLyvHAjBjiO1vPOeSsFJHnI8d2RQwoUX7Xq66tYFApGnt/yvWsgBDGH0fPTgjMGHm7A7+OZSA0PVK3m7KlcFQxBouLyvHAjBjiO1vPOeSsFJHnI8d2RQwoUX7Xq66tYFApGnt/yvWsgBDGH0fPTgjMGHm7A7+OZSA0PVK3m7KlcFQxBouLyvHAjBjiO1vPOeSsFJHnI8d2RQwoUX7Xq66tYFApGnt/yvWsgBDGH0fPTgjMGHm7A7+OZSA0PVK3m7Kl=');
+        audio.volume = 0.3;
+        audio.play().catch(() => {});
+    },
+    playIncorrect() {
+        const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBj+a2/LDciUFLIHO8tiJNwgZaLvt55==');
+        audio.volume = 0.3;
+        audio.play().catch(() => {});
+    }
+};
+
+// Text-to-Speech
+const TTS = {
+    speak(text, lang = 'fil-PH') {
+        if ('speechSynthesis' in window) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = lang;
+            utterance.rate = 0.8;
+            window.speechSynthesis.cancel(); // Cancel any ongoing speech
+            window.speechSynthesis.speak(utterance);
+        }
+    },
+    stop() {
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+        }
+    }
+};
+
+// Save user data periodically
+setInterval(() => {
+    Storage.save('userData', AppState.userData);
+}, 30000); // Save every 30 seconds
+
+// Initialize app when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initApp);
+} else {
+    initApp();
+}
+
+// Navigation System for CebuLingo
+
+function navigateTo(screen) {
+    // Add current screen to history
+    if (AppState.currentScreen && AppState.currentScreen !== screen) {
+        AppState.screenHistory.push(AppState.currentScreen);
+    }
+    
+    // Update current screen
+    AppState.currentScreen = screen;
+    
+    // Render the screen
+    renderScreen(screen);
+}
+
+function navigateBack() {
+    if (AppState.screenHistory.length > 0) {
+        const previousScreen = AppState.screenHistory.pop();
+        AppState.currentScreen = previousScreen;
+        renderScreen(previousScreen);
+    } else {
+        navigateTo('main-menu');
+    }
+}
+
+function renderScreen(screen) {
+    // Clear container
+    clearContainer();
+    
+    // Stop any ongoing speech
+    TTS.stop();
+    
+    // Check if admin page
+    const isAdminPage = screen === 'admin-login' || screen === 'admin-dashboard';
+    const app = document.getElementById('app');
+    const container = document.getElementById('content-container');
+    
+    if (isAdminPage) {
+        app.style.backgroundColor = '#0F172A';
+        container.className = '';
+        container.style.cssText = 'width: 100%; height: 100vh; max-width: 100%; border-radius: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch;';
+    } else {
+        app.style.backgroundColor = '#1C1C1C';
+        updateViewMode();
+    }
+    
+    // Call the appropriate render function
+    const renderFunctionName = `render${screen.split('-').map(s => capitalize(s)).join('')}`;
+    const renderFunction = window[renderFunctionName];
+    
+    if (renderFunction) {
+        renderFunction();
+    } else {
+        console.error(`Render function not found: ${renderFunctionName}`);
+        renderMainMenu();
+    }
+    
+    // Re-initialize Lucide icons
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+// Reusable Components for CebuLingo
+
+// Cow Mascot Component
+function createCowMascot(size = 120, animated = true, pose = 'default') {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', size);
+    svg.setAttribute('height', size * 1.3);
+    svg.setAttribute('viewBox', '0 0 120 156');
+    svg.setAttribute('fill', 'none');
+    
+    // SVG content based on pose
+    svg.innerHTML = getCowSVGContent(animated, pose);
+    
+    return svg;
+}
+
+function getCowSVGContent(animated, pose) {
+    const animateClass = animated ? 'class' : 'data-no-animate';
+    
+    // Determine arm positions based on pose
+    let leftArm = '';
+    let rightArm = '';
+    let eyesContent = '';
+    let mouthContent = '';
+    let extraElements = '';
+    
+    // Left Arm
+    if (pose === 'waving') {
+        leftArm = `<g ${animateClass}="animate-wave" style="transform-origin: 35px 65px">
+            <ellipse cx="32" cy="60" rx="6" ry="16" fill="#D6B68A" transform="rotate(-25 32 60)"/>
+            <ellipse cx="28" cy="48" rx="7" ry="8" fill="#D6B68A"/>
+            <ellipse cx="25" cy="44" rx="2.5" ry="4" fill="#C9A779"/>
+            <ellipse cx="28" cy="42" rx="2.5" ry="4" fill="#C9A779"/>
+            <ellipse cx="31" cy="44" rx="2.5" ry="4" fill="#C9A779"/>
+        </g>`;
+    } else if (pose === 'celebrating') {
+        leftArm = `<g ${animateClass}="animate-celebrate-left">
+            <ellipse cx="32" cy="55" rx="6" ry="18" fill="#D6B68A" transform="rotate(-35 32 55)"/>
+            <ellipse cx="26" cy="42" rx="7" ry="8" fill="#D6B68A"/>
+        </g>`;
+    } else if (pose === 'thinking') {
+        leftArm = `<g>
+            <ellipse cx="38" cy="68" rx="6" ry="14" fill="#D6B68A" transform="rotate(15 38 68)"/>
+            <ellipse cx="40" cy="56" rx="7" ry="8" fill="#D6B68A"/>
+        </g>`;
+    } else {
+        leftArm = `<g>
+            <ellipse cx="35" cy="70" rx="6" ry="16" fill="#D6B68A" transform="rotate(-10 35 70)"/>
+            <ellipse cx="33" cy="86" rx="6" ry="7" fill="#D6B68A"/>
+        </g>`;
+    }
+    
+    // Right Arm
+    if (pose === 'celebrating') {
+        rightArm = `<g ${animateClass}="animate-celebrate-right">
+            <ellipse cx="88" cy="55" rx="6" ry="18" fill="#D6B68A" transform="rotate(35 88 55)"/>
+            <ellipse cx="94" cy="42" rx="7" ry="8" fill="#D6B68A"/>
+        </g>`;
+    } else if (pose === 'encouraging' || pose === 'happy') {
+        rightArm = `<g>
+            <ellipse cx="85" cy="65" rx="6" ry="16" fill="#D6B68A" transform="rotate(20 85 65)"/>
+            <ellipse cx="90" cy="52" rx="7" ry="8" fill="#D6B68A"/>
+            <ellipse cx="92" cy="46" rx="3" ry="5" fill="#C9A779" transform="rotate(20 92 46)"/>
+        </g>`;
+    } else {
+        rightArm = `<g>
+            <ellipse cx="85" cy="70" rx="6" ry="16" fill="#D6B68A" transform="rotate(10 85 70)"/>
+            <ellipse cx="87" cy="86" rx="6" ry="7" fill="#D6B68A"/>
+        </g>`;
+    }
+    
+    // Eyes
+    if (pose === 'celebrating' || pose === 'happy') {
+        eyesContent = `
+            <g ${animateClass}="animate-blink">
+                <ellipse cx="46" cy="40" rx="8" ry="9" fill="#FFFFFF"/>
+                <circle cx="47" cy="41" r="6" fill="#2C2C2C"/>
+                <circle cx="49" cy="39" r="3" fill="#FFFFFF"/>
+                <path d="M 40 36 Q 46 34 52 36" stroke="#5A4A3A" stroke-width="2" fill="none" stroke-linecap="round"/>
+            </g>
+            <g ${animateClass}="animate-blink">
+                <ellipse cx="74" cy="40" rx="8" ry="9" fill="#FFFFFF"/>
+                <circle cx="73" cy="41" r="6" fill="#2C2C2C"/>
+                <circle cx="71" cy="39" r="3" fill="#FFFFFF"/>
+                <path d="M 68 36 Q 74 34 80 36" stroke="#5A4A3A" stroke-width="2" fill="none" stroke-linecap="round"/>
+            </g>`;
+    } else if (pose === 'thinking') {
+        eyesContent = `
+            <g ${animateClass}="animate-blink">
+                <ellipse cx="46" cy="40" rx="7" ry="8" fill="#FFFFFF"/>
+                <circle cx="48" cy="41" r="5" fill="#2C2C2C"/>
+                <circle cx="49" cy="39" r="2.5" fill="#FFFFFF"/>
+            </g>
+            <g ${animateClass}="animate-blink">
+                <ellipse cx="74" cy="38" rx="7" ry="8" fill="#FFFFFF"/>
+                <circle cx="73" cy="39" r="5" fill="#2C2C2C"/>
+                <circle cx="71" cy="37" r="2.5" fill="#FFFFFF"/>
+            </g>`;
+    } else {
+        eyesContent = `
+            <g ${animateClass}="animate-blink">
+                <ellipse cx="46" cy="40" rx="8" ry="9" fill="#FFFFFF"/>
+                <circle cx="47" cy="41" r="6" fill="#2C2C2C"/>
+                <circle cx="49" cy="39" r="3" fill="#FFFFFF"/>
+            </g>
+            <g ${animateClass}="animate-blink">
+                <ellipse cx="74" cy="40" rx="8" ry="9" fill="#FFFFFF"/>
+                <circle cx="73" cy="41" r="6" fill="#2C2C2C"/>
+                <circle cx="71" cy="39" r="3" fill="#FFFFFF"/>
+            </g>`;
+    }
+    
+    // Mouth
+    if (pose === 'celebrating' || pose === 'happy') {
+        mouthContent = `<path d="M 48 58 Q 60 64 72 58" stroke="#5A4A3A" stroke-width="2.5" fill="none" stroke-linecap="round"/>`;
+    } else if (pose === 'thinking') {
+        mouthContent = `<path d="M 50 58 Q 56 60 62 58" stroke="#5A4A3A" stroke-width="2" fill="none" stroke-linecap="round"/>`;
+    } else {
+        mouthContent = `<path d="M 48 58 Q 60 62 72 58" stroke="#5A4A3A" stroke-width="2.5" fill="none" stroke-linecap="round"/>`;
+    }
+    
+    // Extra elements
+    if (pose === 'thinking') {
+        extraElements = `
+            <circle cx="20" cy="35" r="2" fill="#6BB6FF" opacity="0.6"/>
+            <circle cx="14" cy="28" r="3" fill="#6BB6FF" opacity="0.7"/>
+            <ellipse cx="8" cy="18" rx="8" ry="10" fill="#6BB6FF" opacity="0.8" stroke="#1A73E8" stroke-width="1"/>
+            <text x="5" y="21" fill="#1A73E8" font-size="12">?</text>`;
+    } else if (pose === 'celebrating' || pose === 'happy') {
+        extraElements = `<g ${animateClass}="animate-float">
+            <path d="M 10,20 Q 10,15 14,15 Q 18,15 18,20 Q 18,25 10,30 Q 2,25 2,20 Q 2,15 6,15 Q 10,15 10,20" fill="#FF6B9D" opacity="0.7"/>
+            <path d="M 108,25 Q 108,21 111,21 Q 114,21 114,25 Q 114,28 108,32 Q 102,28 102,25 Q 102,21 105,21 Q 108,21 108,25" fill="#FF6B9D" opacity="0.7"/>
+        </g>`;
+    }
+    
+    return `
+        <!-- Tail -->
+        <g ${animateClass}="animate-wag" style="transform-origin: 88px 88px">
+            <path d="M 88 88 Q 98 90 102 94 Q 106 98 104 102" stroke="#D6B68A" stroke-width="4" fill="none" stroke-linecap="round"/>
+            <ellipse cx="104" cy="104" rx="4" ry="6" fill="#8B7355"/>
+        </g>
+        
+        <!-- Back legs -->
+        <rect x="66" y="105" width="10" height="38" rx="5" fill="#D6B68A"/>
+        <rect x="48" y="105" width="10" height="38" rx="5" fill="#D6B68A"/>
+        <ellipse cx="71" cy="143" rx="6" ry="4.5" fill="#5A4A3A"/>
+        <ellipse cx="53" cy="143" rx="6" ry="4.5" fill="#5A4A3A"/>
+        
+        <!-- Body -->
+        <ellipse cx="60" cy="82" rx="32" ry="28" fill="#D6B68A"/>
+        <ellipse cx="60" cy="90" rx="18" ry="14" fill="#E8C9A1" opacity="0.6"/>
+        <ellipse cx="42" cy="76" rx="8" ry="6" fill="#C9A779" opacity="0.7"/>
+        <ellipse cx="72" cy="80" rx="9" ry="7" fill="#C9A779" opacity="0.7"/>
+        <ellipse cx="54" cy="92" rx="7" ry="5" fill="#C9A779" opacity="0.7"/>
+        
+        <!-- Front legs -->
+        <rect x="62" y="105" width="10" height="38" rx="5" fill="#D6B68A"/>
+        <rect x="44" y="105" width="10" height="38" rx="5" fill="#D6B68A"/>
+        <ellipse cx="67" cy="143" rx="6" ry="4.5" fill="#5A4A3A"/>
+        <ellipse cx="49" cy="143" rx="6" ry="4.5" fill="#5A4A3A"/>
+        
+        <!-- Right arm -->
+        ${rightArm}
+        
+        <!-- Neck -->
+        <ellipse cx="60" cy="58" rx="18" ry="16" fill="#D6B68A"/>
+        
+        <!-- Head -->
+        <ellipse cx="60" cy="42" rx="26" ry="24" fill="#D6B68A"/>
+        
+        <!-- Left ear -->
+        <g ${animateClass}="animate-wiggle" style="transform-origin: 40px 28px">
+            <ellipse cx="40" cy="28" rx="10" ry="14" fill="#D6B68A"/>
+            <ellipse cx="40" cy="30" rx="6" ry="9" fill="#E8C9A1"/>
+        </g>
+        
+        <!-- Right ear -->
+        <g ${animateClass}="animate-wiggle" style="transform-origin: 80px 28px">
+            <ellipse cx="80" cy="28" rx="10" ry="14" fill="#D6B68A"/>
+            <ellipse cx="80" cy="30" rx="6" ry="9" fill="#E8C9A1"/>
+        </g>
+        
+        <!-- Horns -->
+        <path d="M 38 22 Q 33 16 31 14 Q 29 12 30 15" stroke="#F5E6D3" stroke-width="5" fill="none" stroke-linecap="round"/>
+        <path d="M 38 22 Q 33 16 31 14" stroke="#8B7355" stroke-width="2" fill="none" stroke-linecap="round"/>
+        <path d="M 82 22 Q 87 16 89 14 Q 91 12 90 15" stroke="#F5E6D3" stroke-width="5" fill="none" stroke-linecap="round"/>
+        <path d="M 82 22 Q 87 16 89 14" stroke="#8B7355" stroke-width="2" fill="none" stroke-linecap="round"/>
+        
+        <!-- Snout -->
+        <ellipse cx="60" cy="52" rx="18" ry="14" fill="#E8C9A1"/>
+        <ellipse cx="54" cy="53" rx="3.5" ry="4.5" fill="#5A4A3A"/>
+        <ellipse cx="66" cy="53" rx="3.5" ry="4.5" fill="#5A4A3A"/>
+        
+        <!-- Eyes -->
+        ${eyesContent}
+        
+        <!-- Mouth -->
+        ${mouthContent}
+        
+        <!-- Rosy cheeks -->
+        <ellipse cx="34" cy="48" rx="7" ry="6" fill="#FFB6C1" opacity="0.5"/>
+        <ellipse cx="86" cy="48" rx="7" ry="6" fill="#FFB6C1" opacity="0.5"/>
+        
+        <!-- Forehead spot -->
+        <ellipse cx="60" cy="32" rx="7" ry="5" fill="#C9A779" opacity="0.6"/>
+        
+        <!-- Left arm -->
+        ${leftArm}
+        
+        <!-- Extra elements -->
+        ${extraElements}
+    `;
+}
+
+// Sparkle Effect Component
+function createSparkleEffect() {
+    const container = createElement('div', 'absolute inset-0 pointer-events-none overflow-hidden');
+    
+    for (let i = 0; i < 20; i++) {
+        const sparkle = createElement('div', 'sparkle', {
+            left: `${Math.random() * 100}%`,
+            top: `${Math.random() * 100}%`,
+            animationDelay: `${Math.random() * 2}s`
+        });
+        sparkle.innerHTML = '\u2728';
+        container.appendChild(sparkle);
+    }
+
+    return container;
+}
+
+// Progress Header Component
+function createProgressHeader(progress, onBack) {
+    const header = createElement('div', 'flex items-center gap-4 p-4');
+
+    const backBtn = createElement('button', 'btn-icon');
+    backBtn.innerHTML = '<i data-lucide="arrow-left" style="width: 20px; height: 20px; color: #6BB6FF;"></i>';
+    backBtn.onclick = onBack;
+
+    const progressContainer = createElement('div', 'flex-1');
+    const progressBar = createElement('div', 'progress-bar');
+    const progressFill = createElement('div', 'progress-bar-fill');
+    progressFill.style.width = `${progress}%`;
+    progressBar.appendChild(progressFill);
+    progressContainer.appendChild(progressBar);
+
+    header.appendChild(backBtn);
+    header.appendChild(progressContainer);
+
+    return header;
+}
+
+// Button Component
+function createButton(text, onClick, style = 'primary', fullWidth = true) {
+    const button = createElement('button', `btn btn-${style} ${fullWidth ? 'w-full' : ''}`);
+    button.textContent = text;
+    button.onclick = onClick;
+    return button;
+}
+
+// Input Component
+function createInput(placeholder, type = 'text') {
+    const input = createElement('input', 'input');
+    input.type = type;
+    input.placeholder = placeholder;
+    return input;
+}
+
+
+
+// Admin Dashboard Screen
+
+function renderAdminDashboard() {
+    const container = document.getElementById('content-container');
+
+    const screen = createElement('div', 'flex h-full');
+    screen.style.backgroundColor = '#0F172A';
+
+    // Sidebar
+    const sidebar = createElement('div', 'w-64 border-r border-[#1E293B] p-6');
+
+    const logo = createElement('h1', 'text-white mb-8');
+    logo.style.fontSize = '24px';
+    logo.innerHTML = '<i data-lucide="shield" style="width: 24px; height: 24px; display: inline; vertical-align: middle; margin-right: 8px; color: #6BB6FF;"></i> Admin Panel';
+
+    const menuItems = [
+        { label: 'Overview', icon: 'layout-dashboard', active: true },
+        { label: 'Users', icon: 'users' },
+        { label: 'Lessons', icon: 'book-open' },
+        { label: 'Analytics', icon: 'bar-chart' },
+        { label: 'Settings', icon: 'settings' }
+    ];
+
+    const menu = createElement('div', 'space-y-2 mb-8');
+    menuItems.forEach(item => {
+        const menuItem = createElement('button', `w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${item.active ? 'bg-[#1E293B]' : 'hover:bg-[#1E293B]'}`);
+        menuItem.innerHTML = `
+            <i data-lucide="${item.icon}" style="width: 20px; height: 20px; color: ${item.active ? '#6BB6FF' : '#94A3B8'};"></i>
+            <span style="color: ${item.active ? 'white' : '#94A3B8'}; font-size: 14px;">${item.label}</span>
+        `;
+        menu.appendChild(menuItem);
+    });
+
+    const logoutBtn = createButton('Logout', () => navigateTo('admin-login'), 'secondary', true);
+
+    sidebar.appendChild(logo);
+    sidebar.appendChild(menu);
+    sidebar.appendChild(logoutBtn);
+
+    // Main content
+    const mainContent = createElement('div', 'flex-1 overflow-y-auto p-8');
+
+    const header = createElement('h2', 'text-white mb-6');
+    header.style.fontSize = '28px';
+    header.textContent = 'Dashboard Overview';
+    mainContent.appendChild(header);
+
+    // Stats cards
+    const statsGrid = createElement('div', 'grid grid-3 gap-6 mb-8');
+
+    const stats = [
+        { label: 'Total Users', value: '1,234', icon: 'users', color: '#6BB6FF' },
+        { label: 'Active Lessons', value: '48', icon: 'book-open', color: '#10B981' },
+        { label: 'Completion Rate', value: '67%', icon: 'trending-up', color: '#FFD700' }
+    ];
+
+    stats.forEach(stat => {
+        const card = createElement('div', 'p-6 rounded-xl');
+        card.style.backgroundColor = '#1E293B';
+
+        const iconContainer = createElement('div', 'mb-4');
+        iconContainer.innerHTML = `<i data-lucide="${stat.icon}" style="width: 32px; height: 32px; color: ${stat.color};"></i>`;
+
+        const value = createElement('div', 'text-white mb-1');
+        value.style.fontSize = '32px';
+        value.style.fontWeight = '700';
+        value.textContent = stat.value;
+
+        const label = createElement('div', 'text-[#94A3B8]');
+        label.style.fontSize = '14px';
+        label.textContent = stat.label;
+
+        card.appendChild(iconContainer);
+        card.appendChild(value);
+        card.appendChild(label);
+        statsGrid.appendChild(card);
+    });
+
+    mainContent.appendChild(statsGrid);
+
+    // Recent activity
+    const activityTitle = createElement('h3', 'text-white mb-4');
+    activityTitle.style.fontSize = '20px';
+    activityTitle.textContent = 'Recent Activity';
+    mainContent.appendChild(activityTitle);
+
+    const activityTable = createElement('div', 'rounded-xl overflow-hidden');
+    activityTable.style.backgroundColor = '#1E293B';
+
+    const table = createElement('table', '');
+    table.innerHTML = `
+        <thead>
+            <tr>
+                <th>User</th>
+                <th>Action</th>
+                <th>Time</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Juan Dela Cruz</td>
+                <td>Completed Lesson</td>
+                <td>2 minutes ago</td>
+            </tr>
+            <tr>
+                <td>Maria Santos</td>
+                <td>Started Unit 2</td>
+                <td>15 minutes ago</td>
+            </tr>
+            <tr>
+                <td>Pedro Garcia</td>
+                <td>Earned Achievement</td>
+                <td>1 hour ago</td>
+            </tr>
+            <tr>
+                <td>Ana Reyes</td>
+                <td>Completed Lesson</td>
+                <td>2 hours ago</td>
+            </tr>
+        </tbody>
+    `;
+
+    activityTable.appendChild(table);
+    mainContent.appendChild(activityTable);
+
+    screen.appendChild(sidebar);
+    screen.appendChild(mainContent);
+    container.appendChild(screen);
+
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+// Admin Login Screen
+
+function renderAdminLogin() {
+    const container = document.getElementById('content-container');
+
+    const screen = createElement('div', 'flex flex-col h-full items-center justify-center');
+    screen.style.backgroundColor = '#0F172A';
+
+    const content = createElement('div', 'px-16 w-full max-w-md');
+
+    // Icon
+    const iconContainer = createElement('div', 'text-center mb-8');
+    iconContainer.innerHTML = '<i data-lucide="shield" style="width: 80px; height: 80px; color: #6BB6FF; margin: 0 auto; display: block;"></i>';
+
+    // Title
+    const title = createElement('h1', 'text-white text-center mb-8');
+    title.style.fontSize = '32px';
+    title.textContent = 'Admin Access';
+
+    content.appendChild(iconContainer);
+    content.appendChild(title);
+
+    // Form
+    const form = createElement('div', 'space-y-4');
+
+    const usernameInput = createInput('Username', 'text');
+    const passwordInput = createInput('Password', 'password');
+
+    const loginButton = createButton('LOGIN', () => {
+        const username = usernameInput.value;
+        const password = passwordInput.value;
+
+        if (username === 'admin' && password === 'admin') {
+            navigateTo('admin-dashboard');
+        } else {
+            alert('Invalid credentials. Use admin/admin');
+        }
+    }, 'primary', true);
+    loginButton.style.height = '56px';
+
+    const backButton = createButton('BACK', () => navigateTo('main-menu'), 'secondary', true);
+    backButton.style.height = '48px';
+
+    form.appendChild(usernameInput);
+    form.appendChild(passwordInput);
+    form.appendChild(loginButton);
+    form.appendChild(backButton);
+
+    content.appendChild(form);
+    screen.appendChild(content);
+    container.appendChild(screen);
+
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+// Dashboard Screen - 3D Learning Path
+
+function renderDashboard() {
+    const container = document.getElementById('content-container');
+    const isMobile = AppState.isMobile;
+
+    const screen = createElement('div', 'h-full overflow-y-auto relative');
+    screen.style.backgroundColor = '#1C1C1C';
+
+    // Top Header Bar
+    const header = createElement('div', 'sticky top-0 z-20 px-4 py-3');
+    header.style.background = 'linear-gradient(180deg, #1C1C1C 0%, rgba(28, 28, 28, 0.98) 100%)';
+    header.style.borderBottom = '1px solid #2A2A2A';
+
+    const headerContent = createElement('div', 'flex items-center justify-between');
+
+    // Left side - Logo
+    const leftSide = createElement('div', 'flex items-center gap-3');
+    const logo = createElement('h1', 'text-white');
+    logo.style.fontSize = '18px';
+    logo.style.cssText = 'font-size: 18px; font-weight: 700; background: linear-gradient(135deg, #fff 0%, #6BB6FF 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;';
+    logo.textContent = 'CebuLingo';
+    leftSide.appendChild(logo);
+
+    // Center - Stats
+    const centerSide = createElement('div', 'flex items-center gap-3');
+    const streakBadge = createElement('div', 'flex items-center gap-2 px-3 py-1.5 rounded-xl');
+    streakBadge.style.backgroundColor = '#2A2A2A';
+    streakBadge.innerHTML = `
+        <i data-lucide="flame" style="width: 16px; height: 16px; color: #FF6B35;"></i>
+        <span class="text-white" style="font-size: 14px;">${AppState.userData.streak}</span>
+    `;
+
+    const xpBadge = createElement('div', 'flex items-center gap-2 px-3 py-1.5 rounded-xl');
+    xpBadge.style.backgroundColor = '#2A2A2A';
+    xpBadge.innerHTML = `
+        <i data-lucide="star" style="width: 16px; height: 16px; color: #FFD700; fill: #FFD700;"></i>
+        <span class="text-white" style="font-size: 14px;">${AppState.userData.totalXP}</span>
+    `;
+
+    centerSide.appendChild(streakBadge);
+    centerSide.appendChild(xpBadge);
+
+    // Right side - Profile photo
+    const rightSide = createElement('div', 'flex items-center gap-2');
+
+    const profileBtn = createElement('button', 'btn-icon');
+    profileBtn.style.cssText = 'padding: 0; border: none; background: none; cursor: pointer;';
+    if (AppState.userData.photoURL) {
+        const profileImg = createElement('img', '');
+        profileImg.src = AppState.userData.photoURL;
+        profileImg.style.cssText = 'width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid #1A73E8;';
+        profileBtn.appendChild(profileImg);
+    } else {
+        profileBtn.innerHTML = '<i data-lucide="user-circle" style="width: 28px; height: 28px; color: #6BB6FF;"></i>';
+    }
+    profileBtn.onclick = () => navigateTo('profile');
+    rightSide.appendChild(profileBtn);
+
+    headerContent.appendChild(leftSide);
+    headerContent.appendChild(centerSide);
+    headerContent.appendChild(rightSide);
+    header.appendChild(headerContent);
+    screen.appendChild(header);
+
+    // Learning Path Content
+    const pathContainer = createElement('div', `${isMobile ? 'px-6 py-8' : 'px-12 py-12'} relative`);
+    const pathContent = createElement('div', 'max-w-2xl mx-auto relative');
+
+    // Mock units data
+    const units = [
+        {
+            id: 1,
+            title: 'Unit 1',
+            description: 'Form basic sentences, greet people',
+            color: '#1A73E8',
+            lessons: [
+                { id: 1, title: 'Basic Greetings', type: 'lesson', status: 'completed', stars: 3, xp: 150 },
+                { id: 2, title: 'Introductions', type: 'lesson', status: 'completed', stars: 3, xp: 150 },
+                { id: 3, title: 'Practice', type: 'practice', status: 'completed', stars: 3, xp: 100 },
+                { id: 4, title: 'Common Phrases', type: 'lesson', status: 'completed', stars: 2, xp: 120 },
+                { id: 5, title: 'Unit 1 Review', type: 'review', status: 'completed', stars: 3, xp: 200 }
+            ]
+        },
+        {
+            id: 2,
+            title: 'Unit 2',
+            description: 'Talk about family and friends',
+            color: '#6BB6FF',
+            lessons: [
+                { id: 6, title: 'Family Members', type: 'lesson', status: 'completed', stars: 3, xp: 150 },
+                { id: 7, title: 'Relationships', type: 'lesson', status: 'completed', stars: 2, xp: 120 },
+                { id: 8, title: 'Story Time', type: 'story', status: 'current', stars: 0, xp: 0 },
+                { id: 9, title: 'Describing People', type: 'lesson', status: 'unlocked', stars: 0, xp: 0 },
+                { id: 10, title: 'Unit 2 Boss', type: 'boss', status: 'locked', stars: 0, xp: 0 }
+            ]
+        },
+        {
+            id: 3,
+            title: 'Unit 3',
+            description: 'Order food and drinks',
+            color: '#1A73E8',
+            lessons: [
+                { id: 11, title: 'Food Basics', type: 'lesson', status: 'locked', stars: 0, xp: 0 },
+                { id: 12, title: 'At the Restaurant', type: 'lesson', status: 'locked', stars: 0, xp: 0 },
+                { id: 13, title: 'Practice', type: 'practice', status: 'locked', stars: 0, xp: 0 }
+            ]
+        }
+    ];
+
+    units.forEach((unit, unitIndex) => {
+        const unitSection = createElement('div', 'relative mb-16');
+
+        // Unit header
+        const unitHeader = createElement('div', `${isMobile ? 'p-4 mb-8' : 'p-6 mb-12'} rounded-2xl`);
+        unitHeader.style.backgroundColor = '#2A2A2A';
+        unitHeader.innerHTML = `
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-white mb-1" style="font-size: ${isMobile ? '20px' : '28px'};">${unit.title}</h2>
+                    <p class="text-[#BEBEBE]" style="font-size: ${isMobile ? '14px' : '16px'};">${unit.description}</p>
+                </div>
+                <div class="${isMobile ? 'w-12 h-12' : 'w-16 h-16'} rounded-xl flex items-center justify-center" style="background-color: ${unit.color};">
+                    <span class="text-white" style="font-size: ${isMobile ? '20px' : '28px'};">${unit.id}</span>
+                </div>
+            </div>
+        `;
+
+        // Lessons
+        const lessonsContainer = createElement('div', 'relative');
+
+        unit.lessons.forEach((lesson, lessonIndex) => {
+            const isLeft = lessonIndex % 2 === 0;
+            const isCurrent = lesson.status === 'current';
+
+            const lessonWrapper = createElement('div', `relative mb-12 flex ${isLeft ? 'justify-start' : 'justify-end'}`);
+            const lessonContainer = createElement('div', `flex flex-col items-center ${isLeft ? 'mr-auto' : 'ml-auto'}`);
+
+            // Current lesson cow
+            if (isCurrent) {
+                const cowWrapper = createElement('div', 'absolute -top-20 left-1/2 transform -translate-x-1/2 z-10');
+                const cowAnimated = createElement('div', 'animate-bounce-gentle');
+                cowAnimated.appendChild(createCowMascot(isMobile ? 80 : 120, true, 'happy'));
+                cowWrapper.appendChild(cowAnimated);
+                lessonContainer.appendChild(cowWrapper);
+            }
+
+            // Lesson button
+            const lessonSize = lesson.type === 'boss' ? (isMobile ? 'w-24 h-24' : 'w-32 h-32')
+                : lesson.type === 'review' ? (isMobile ? 'w-20 h-20' : 'w-28 h-28')
+                : (isMobile ? 'w-16 h-16' : 'w-24 h-24');
+
+            let lessonColor = '#3A3A3A';
+            if (lesson.status === 'completed') lessonColor = '#10B981';
+            else if (lesson.status === 'current') lessonColor = '#FFD700';
+            else if (lesson.status === 'unlocked') lessonColor = unit.color;
+
+            const lessonBtn = createElement('button', `${lessonSize} rounded-full flex items-center justify-center transition-all duration-300 ${lesson.status !== 'locked' ? 'hover:scale-110 cursor-pointer' : 'cursor-default opacity-50'} ${isCurrent ? 'animate-pulse' : ''}`);
+            lessonBtn.style.backgroundColor = lessonColor;
+            lessonBtn.style.boxShadow = lesson.status !== 'locked' ? `0 8px 24px ${lessonColor}40` : 'none';
+
+            if (lesson.status === 'unlocked' || lesson.status === 'current') {
+                lessonBtn.onclick = () => navigateTo('lesson-start');
+            }
+
+            // Lesson icon
+            let iconHTML = '';
+            if (lesson.status === 'completed') {
+                iconHTML = `<i data-lucide="check-circle" style="width: ${isMobile ? '32px' : '40px'}; height: ${isMobile ? '32px' : '40px'}; color: white;"></i>`;
+            } else if (lesson.status === 'locked') {
+                iconHTML = `<i data-lucide="lock" style="width: ${isMobile ? '24px' : '32px'}; height: ${isMobile ? '24px' : '32px'}; color: #888;"></i>`;
+            } else if (lesson.type === 'boss') {
+                iconHTML = `<i data-lucide="crown" style="width: ${isMobile ? '32px' : '40px'}; height: ${isMobile ? '32px' : '40px'}; color: white;"></i>`;
+            } else if (lesson.type === 'practice') {
+                iconHTML = `<i data-lucide="award" style="width: ${isMobile ? '24px' : '32px'}; height: ${isMobile ? '24px' : '32px'}; color: white;"></i>`;
+            } else if (lesson.type === 'story') {
+                iconHTML = '<span style="font-size: ' + (isMobile ? '24px' : '32px') + ';">\uD83D\uDCD6</span>';
+            } else {
+                iconHTML = `<i data-lucide="star" style="width: ${isMobile ? '24px' : '32px'}; height: ${isMobile ? '24px' : '32px'}; color: white;"></i>`;
+            }
+            lessonBtn.innerHTML = iconHTML;
+
+            lessonContainer.appendChild(lessonBtn);
+
+            // Lesson info
+            const lessonInfo = createElement('div', 'mt-3 text-center');
+            const lessonTitle = createElement('p', lesson.status === 'locked' ? 'text-gray-600 mb-1' : 'text-white mb-1');
+            lessonTitle.style.fontSize = isMobile ? '12px' : '14px';
+            lessonTitle.textContent = lesson.title;
+            lessonInfo.appendChild(lessonTitle);
+
+            // Stars
+            if (lesson.status !== 'locked' && lesson.stars > 0) {
+                const starsContainer = createElement('div', 'flex items-center justify-center gap-1');
+                for (let i = 0; i < 3; i++) {
+                    const star = createElement('span');
+                    star.innerHTML = `<i data-lucide="star" style="width: ${isMobile ? '12px' : '16px'}; height: ${isMobile ? '12px' : '16px'}; color: ${i < lesson.stars ? '#FFD700' : '#666'}; fill: ${i < lesson.stars ? '#FFD700' : 'none'};"></i>`;
+                    starsContainer.appendChild(star);
+                }
+                lessonInfo.appendChild(starsContainer);
+            }
+
+            // XP badge
+            if (lesson.status === 'completed' && lesson.xp > 0) {
+                const xpBadge = createElement('div', `mt-2 ${isMobile ? 'px-2 py-1' : 'px-3 py-1'} rounded-full`);
+                xpBadge.style.backgroundColor = '#2A2A2A';
+                xpBadge.innerHTML = `<span class="text-[#6BB6FF]" style="font-size: ${isMobile ? '10px' : '12px'};">+${lesson.xp} XP</span>`;
+                lessonInfo.appendChild(xpBadge);
+            }
+
+            lessonContainer.appendChild(lessonInfo);
+            lessonWrapper.appendChild(lessonContainer);
+            lessonsContainer.appendChild(lessonWrapper);
+        });
+
+        unitSection.appendChild(unitHeader);
+        unitSection.appendChild(lessonsContainer);
+        pathContent.appendChild(unitSection);
+    });
+
+    // End message
+    const endMessage = createElement('div', 'text-center mt-12 mb-8');
+    const endCow = createElement('div', 'inline-block');
+    endCow.appendChild(createCowMascot(isMobile ? 100 : 140, true, 'encouraging'));
+    endMessage.appendChild(endCow);
+
+    const endText = createElement('p', 'text-[#BEBEBE] mt-4');
+    endText.style.fontSize = isMobile ? '14px' : '16px';
+    endText.textContent = 'More units coming soon! \uD83C\uDF89';
+    endMessage.appendChild(endText);
+
+    pathContent.appendChild(endMessage);
+    pathContainer.appendChild(pathContent);
+    screen.appendChild(pathContainer);
+
+    // Bottom spacer for nav bar
+    const spacer = createElement('div', '');
+    spacer.style.height = '80px';
+    screen.appendChild(spacer);
+
+    // Bottom Navigation Bar
+    screen.appendChild(createBottomNav('dashboard'));
+
+    container.appendChild(screen);
+
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+// Leaderboard Screen
+
+function renderLeaderboard() {
+    const container = document.getElementById('content-container');
+    const isMobile = AppState.isMobile;
+
+    const screen = createElement('div', 'flex flex-col h-full overflow-y-auto');
+    screen.style.backgroundColor = '#1C1C1C';
+
+    // Header
+    const header = createElement('div', 'flex items-center justify-between p-4 border-b border-[#2A2A2A]');
+    const logo = createElement('h1', 'text-white');
+    logo.style.cssText = 'font-size: 18px; font-weight: 700; background: linear-gradient(135deg, #fff 0%, #6BB6FF 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;';
+    logo.textContent = 'Ranks';
+
+    header.appendChild(logo);
+
+    const title = createElement('h1', 'text-white flex-1');
+    title.style.fontSize = isMobile ? '20px' : '28px';
+    title.textContent = 'Leaderboard';
+
+    header.appendChild(backBtn);
+    header.appendChild(title);
+    screen.appendChild(header);
+
+    // Content
+    const content = createElement('div', `flex-1 ${isMobile ? 'px-6 py-6' : 'px-12 py-8'}`);
+
+    // Podium
+    const podium = createElement('div', 'podium mb-8');
+
+    const topUsers = [
+        { rank: 2, name: 'Maria Santos', xp: 3500, avatar: '\uD83D\uDC69' },
+        { rank: 1, name: 'Juan Dela Cruz', xp: 4200, avatar: '\uD83D\uDC68' },
+        { rank: 3, name: 'Pedro Garcia', xp: 3100, avatar: '\uD83E\uDDD1' }
+    ];
+
+    [topUsers[0], topUsers[1], topUsers[2]].forEach(user => {
+        const place = createElement('div', 'podium-place');
+
+        const avatar = createElement('div', 'text-4xl mb-2');
+        avatar.textContent = user.avatar;
+
+        const podiumBlock = createElement('div', `podium-block ${user.rank === 1 ? 'first' : user.rank === 2 ? 'second' : 'third'}`);
+        podiumBlock.textContent = user.rank;
+        podiumBlock.style.fontSize = '32px';
+        podiumBlock.style.fontWeight = '700';
+        podiumBlock.style.color = 'white';
+
+        const nameText = createElement('p', 'text-white text-center mt-2');
+        nameText.style.fontSize = '14px';
+        nameText.textContent = user.name;
+
+        const xpText = createElement('p', 'text-[#6BB6FF] text-center');
+        xpText.style.fontSize = '12px';
+        xpText.textContent = `${user.xp} XP`;
+
+        place.appendChild(avatar);
+        place.appendChild(podiumBlock);
+        place.appendChild(nameText);
+        place.appendChild(xpText);
+        podium.appendChild(place);
+    });
+
+    content.appendChild(podium);
+
+    // Rankings list
+    const rankingsList = createElement('div', 'space-y-2');
+
+    const users = [
+        { rank: 4, name: 'You', xp: AppState.userData.totalXP, avatar: '\uD83D\uDC2E', isCurrentUser: true },
+        { rank: 5, name: 'Ana Reyes', xp: 2400, avatar: '\uD83D\uDC69' },
+        { rank: 6, name: 'Carlos Martinez', xp: 2100, avatar: '\uD83D\uDC68' },
+        { rank: 7, name: 'Lisa Wong', xp: 1950, avatar: '\uD83D\uDC69' },
+        { rank: 8, name: 'Miguel Cruz', xp: 1800, avatar: '\uD83E\uDDD1' }
+    ];
+
+    users.forEach(user => {
+        const card = createElement('div', `card p-4 flex items-center gap-4 ${user.isCurrentUser ? 'border-2' : ''}`);
+        if (user.isCurrentUser) {
+            card.style.borderColor = '#1A73E8';
+        }
+
+        const rank = createElement('div', 'text-white');
+        rank.style.fontSize = '20px';
+        rank.style.fontWeight = '700';
+        rank.style.minWidth = '40px';
+        rank.textContent = `#${user.rank}`;
+
+        const avatar = createElement('div');
+        avatar.style.fontSize = '32px';
+        avatar.textContent = user.avatar;
+
+        const info = createElement('div', 'flex-1');
+        const name = createElement('p', 'text-white');
+        name.style.fontSize = '16px';
+        name.textContent = user.name;
+
+        const xp = createElement('p', 'text-[#BEBEBE]');
+        xp.style.fontSize = '14px';
+        xp.textContent = `${user.xp} XP`;
+
+        info.appendChild(name);
+        info.appendChild(xp);
+
+        card.appendChild(rank);
+        card.appendChild(avatar);
+        card.appendChild(info);
+        rankingsList.appendChild(card);
+    });
+
+    content.appendChild(rankingsList);
+    screen.appendChild(content);
+
+    // Bottom spacer and nav
+    const spacer = createElement('div', '');
+    spacer.style.height = '80px';
+    screen.appendChild(spacer);
+    screen.appendChild(createBottomNav('leaderboard'));
+
+    container.appendChild(screen);
+
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+// Lesson Complete Screen
+
+function renderLessonComplete() {
+    const container = document.getElementById('content-container');
+    const isMobile = AppState.isMobile;
+
+    const screen = createElement('div', 'flex flex-col h-full items-center justify-center relative');
+    screen.style.backgroundColor = '#1C1C1C';
+
+    // Sparkle effect
+    screen.appendChild(createSparkleEffect());
+
+    const content = createElement('div', `${isMobile ? 'px-8' : 'px-16'} text-center space-y-6 z-10`);
+
+    // Celebrating cow
+    const cowContainer = createElement('div', '');
+    cowContainer.appendChild(createCowMascot(isMobile ? 160 : 200, true, 'celebrating'));
+    content.appendChild(cowContainer);
+
+    // Title
+    const title = createElement('h1', 'text-white mb-2');
+    title.style.fontSize = isMobile ? '36px' : '48px';
+    title.style.fontWeight = '700';
+    title.textContent = 'Lesson Complete!';
+
+    // Score
+    const scoreText = createElement('p', 'text-[#BEBEBE] mb-4');
+    scoreText.style.fontSize = isMobile ? '18px' : '22px';
+    scoreText.textContent = `You earned ${score * 50} XP!`;
+
+    content.appendChild(title);
+    content.appendChild(scoreText);
+
+    // Stars
+    const starsContainer = createElement('div', 'flex items-center justify-center gap-2 mb-8');
+    for (let i = 0; i < 3; i++) {
+        const star = createElement('span');
+        star.innerHTML = `<i data-lucide="star" style="width: ${isMobile ? '40px' : '56px'}; height: ${isMobile ? '40px' : '56px'}; color: #FFD700; fill: ${i < score ? '#FFD700' : 'none'};"></i>`;
+        starsContainer.appendChild(star);
+    }
+    content.appendChild(starsContainer);
+
+    // Button
+    const buttonContainer = createElement('div', `w-full max-w-md mx-auto`);
+    const continueBtn = createButton('CONTINUE', () => navigateTo('dashboard'), 'primary', true);
+    continueBtn.style.height = isMobile ? '56px' : '64px';
+    buttonContainer.appendChild(continueBtn);
+    content.appendChild(buttonContainer);
+
+    screen.appendChild(content);
+    container.appendChild(screen);
+
+    // Update user data
+    AppState.userData.totalXP += score * 50;
+    Storage.save('userData', AppState.userData);
+
+    // Sync with Firestore if logged in
+    const user = auth.currentUser;
+    if (user) {
+        db.collection('users').doc(user.uid).update({
+            totalXP: AppState.userData.totalXP,
+            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+        }).catch(err => console.error("Firestore sync failed:", err));
+    }
+
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+// Lesson Gameplay Screen
+
+let currentQuestionIndex = 0;
+let score = 0;
+let selectedAnswer = null;
+let questions = [];
+
+function initQuizData() {
+    questions = [
+        {
+            cebuano: 'Kumusta',
+            english: 'Hello / How are you?',
+            options: [
+                { text: 'Hello', image: 'people greeting' },
+                { text: 'Goodbye', image: 'people waving goodbye' },
+                { text: 'Thank you', image: 'gratitude' },
+                { text: 'Please', image: 'polite request' }
+            ],
+            correctIndex: 0
+        },
+        {
+            cebuano: 'Salamat',
+            english: 'Thank you',
+            options: [
+                { text: 'Hello', image: 'people greeting' },
+                { text: 'Thank you', image: 'gratitude' },
+                { text: 'Please', image: 'polite request' },
+                { text: 'Goodbye', image: 'people waving goodbye' }
+            ],
+            correctIndex: 1
+        },
+        {
+            cebuano: 'Palihug',
+            english: 'Please',
+            options: [
+                { text: 'Thank you', image: 'gratitude' },
+                { text: 'Yes', image: 'thumbs up' },
+                { text: 'Please', image: 'polite request' },
+                { text: 'No', image: 'thumbs down' }
+            ],
+            correctIndex: 2
+        }
+    ];
+    currentQuestionIndex = 0;
+    score = 0;
+    selectedAnswer = null;
+}
+
+function renderLessonGameplay() {
+    initQuizData();
+    renderQuestion();
+}
+
+function renderQuestion() {
+    const container = document.getElementById('content-container');
+    const isMobile = AppState.isMobile;
+
+    container.innerHTML = '';
+
+    const screen = createElement('div', 'flex flex-col h-full');
+    screen.style.backgroundColor = '#1C1C1C';
+
+    // Header with progress
+    const progress = ((currentQuestionIndex + 1) / questions.length) * 100;
+    const header = createElement('div', `flex items-center gap-4 ${isMobile ? 'p-4' : 'p-6'}`);
+
+    const closeBtn = createElement('button', 'btn-icon');
+    closeBtn.innerHTML = '<i data-lucide="x" style="width: 20px; height: 20px; color: #6BB6FF;"></i>';
+    closeBtn.onclick = () => {
+        if (confirm('Are you sure you want to exit? Your progress will be lost.')) {
+            navigateTo('dashboard');
+        }
+    };
+
+    const progressContainer = createElement('div', 'flex-1');
+    const progressBar = createElement('div', 'progress-bar');
+    const progressFill = createElement('div', 'progress-bar-fill');
+    progressFill.style.width = `${progress}%`;
+    progressBar.appendChild(progressFill);
+    progressContainer.appendChild(progressBar);
+
+    header.appendChild(closeBtn);
+    header.appendChild(progressContainer);
+    screen.appendChild(header);
+
+    // Question content
+    const content = createElement('div', `flex-1 flex flex-col ${isMobile ? 'px-6 py-4' : 'px-12 py-8'}`);
+
+    const question = questions[currentQuestionIndex];
+
+    // Question text
+    const questionText = createElement('div', 'text-center mb-8');
+    const instruction = createElement('p', 'text-[#BEBEBE] mb-4');
+    instruction.style.fontSize = isMobile ? '14px' : '16px';
+    instruction.textContent = 'What does this mean?';
+
+    const cebuanoWord = createElement('h1', 'text-white');
+    cebuanoWord.style.fontSize = isMobile ? '32px' : '48px';
+    cebuanoWord.style.fontWeight = '700';
+    cebuanoWord.textContent = question.cebuano;
+
+    questionText.appendChild(instruction);
+    questionText.appendChild(cebuanoWord);
+    content.appendChild(questionText);
+
+    // Options grid
+    const optionsGrid = createElement('div', `grid ${isMobile ? 'grid-2' : 'grid-2'} gap-4 flex-1 max-w-3xl mx-auto w-full`);
+
+    question.options.forEach((option, index) => {
+        const optionCard = createElement('div', 'image-card transition-all cursor-pointer');
+        optionCard.style.height = isMobile ? '140px' : '180px';
+        optionCard.style.backgroundColor = '#2A2A2A';
+        optionCard.style.display = 'flex';
+        optionCard.style.flexDirection = 'column';
+        optionCard.style.alignItems = 'center';
+        optionCard.style.justifyContent = 'center';
+        optionCard.style.padding = '1rem';
+
+        // Placeholder for image
+        const imagePlaceholder = createElement('div', 'mb-3');
+        imagePlaceholder.style.fontSize = '48px';
+        imagePlaceholder.textContent = '\uD83D\uDDBC\uFE0F';
+
+        const label = createElement('p', 'text-white text-center');
+        label.style.fontSize = isMobile ? '14px' : '16px';
+        label.textContent = option.text;
+
+        optionCard.appendChild(imagePlaceholder);
+        optionCard.appendChild(label);
+
+        optionCard.onclick = () => selectAnswer(index, optionCard);
+        optionsGrid.appendChild(optionCard);
+    });
+
+    content.appendChild(optionsGrid);
+
+    // Check button
+    const buttonContainer = createElement('div', `w-full max-w-3xl mx-auto mt-6`);
+    const checkBtn = createButton('CHECK', checkAnswer, 'primary', true);
+    checkBtn.id = 'check-button';
+    checkBtn.style.height = isMobile ? '56px' : '64px';
+    checkBtn.disabled = true;
+    checkBtn.style.opacity = '0.5';
+    buttonContainer.appendChild(checkBtn);
+    content.appendChild(buttonContainer);
+
+    screen.appendChild(content);
+    container.appendChild(screen);
+
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+function selectAnswer(index, card) {
+    // Remove previous selection
+    document.querySelectorAll('.image-card').forEach(c => {
+        c.style.boxShadow = '';
+        c.classList.remove('selected');
+    });
+
+    // Select current
+    card.style.boxShadow = '0 0 0 4px #1A73E8';
+    card.classList.add('selected');
+    selectedAnswer = index;
+
+    // Enable check button
+    const checkBtn = document.getElementById('check-button');
+    checkBtn.disabled = false;
+    checkBtn.style.opacity = '1';
+}
+
+function checkAnswer() {
+    const question = questions[currentQuestionIndex];
+    const isCorrect = selectedAnswer === question.correctIndex;
+
+    // Visual feedback
+    const cards = document.querySelectorAll('.image-card');
+    if (isCorrect) {
+        cards[selectedAnswer].style.boxShadow = '0 0 0 4px #10B981';
+        SoundEffects.playCorrect();
+        score++;
+
+        setTimeout(() => {
+            if (currentQuestionIndex < questions.length - 1) {
+                currentQuestionIndex++;
+                renderQuestion();
+            } else {
+                navigateTo('lesson-complete');
+            }
+        }, 1500);
+    } else {
+        cards[selectedAnswer].style.boxShadow = '0 0 0 4px #EF4444';
+        cards[question.correctIndex].style.boxShadow = '0 0 0 4px #10B981';
+        SoundEffects.playIncorrect();
+
+        setTimeout(() => {
+            // Show correct answer and continue
+            if (currentQuestionIndex < questions.length - 1) {
+                currentQuestionIndex++;
+                renderQuestion();
+            } else {
+                navigateTo('lesson-complete');
+            }
+        }, 2000);
+    }
+
+    // Disable check button
+    const checkBtn = document.getElementById('check-button');
+    checkBtn.disabled = true;
+    checkBtn.style.opacity = '0.5';
+}
+
+// Lesson Reviewer Screen
+
+function renderLessonReviewer() {
+    const container = document.getElementById('content-container');
+    const isMobile = AppState.isMobile;
+
+    const screen = createElement('div', 'flex flex-col h-full');
+    screen.style.backgroundColor = '#1C1C1C';
+
+    // Header
+    const header = createProgressHeader(30, navigateBack);
+    screen.appendChild(header);
+
+    // Content
+    const content = createElement('div', `flex-1 flex flex-col ${isMobile ? 'px-8 py-6' : 'px-16 py-8'}`);
+
+    // Title
+    const title = createElement('h2', 'text-white text-center mb-8');
+    title.style.fontSize = isMobile ? '24px' : '32px';
+    title.textContent = 'Review These Words';
+
+    content.appendChild(title);
+
+    // Review cards
+    const reviewData = [
+        { cebuano: 'Kumusta', english: 'Hello / How are you?' },
+        { cebuano: 'Salamat', english: 'Thank you' },
+        { cebuano: 'Palihug', english: 'Please' },
+        { cebuano: 'Oo', english: 'Yes' },
+        { cebuano: 'Dili', english: 'No' }
+    ];
+
+    const cardsContainer = createElement('div', `space-y-4 flex-1 overflow-y-auto ${isMobile ? 'max-w-md' : 'max-w-2xl'} mx-auto w-full`);
+
+    reviewData.forEach(item => {
+        const card = createElement('div', 'card p-6 flex items-center justify-between');
+
+        const leftSide = createElement('div', '');
+        const cebuanoText = createElement('p', 'text-white mb-1');
+        cebuanoText.style.fontSize = isMobile ? '20px' : '24px';
+        cebuanoText.style.fontWeight = '600';
+        cebuanoText.textContent = item.cebuano;
+
+        const englishText = createElement('p', 'text-[#BEBEBE]');
+        englishText.style.fontSize = isMobile ? '14px' : '16px';
+        englishText.textContent = item.english;
+
+        leftSide.appendChild(cebuanoText);
+        leftSide.appendChild(englishText);
+
+        const speakerBtn = createElement('button', 'btn-icon');
+        speakerBtn.innerHTML = '<i data-lucide="volume-2" style="width: 24px; height: 24px; color: #6BB6FF;"></i>';
+        speakerBtn.onclick = () => TTS.speak(item.cebuano, 'fil-PH');
+
+        card.appendChild(leftSide);
+        card.appendChild(speakerBtn);
+        cardsContainer.appendChild(card);
+    });
+
+    content.appendChild(cardsContainer);
+
+    // Continue button
+    const buttonContainer = createElement('div', `w-full ${isMobile ? 'max-w-md' : 'max-w-2xl'} mx-auto mt-6`);
+    const continueBtn = createButton('CONTINUE TO QUIZ', () => navigateTo('lesson-gameplay'), 'primary', true);
+    continueBtn.style.height = isMobile ? '56px' : '64px';
+    buttonContainer.appendChild(continueBtn);
+    content.appendChild(buttonContainer);
+
+    screen.appendChild(content);
+    container.appendChild(screen);
+
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+// Lesson Start Screen
+
+function renderLessonStart() {
+    const container = document.getElementById('content-container');
+    const isMobile = AppState.isMobile;
+
+    const screen = createElement('div', 'flex flex-col h-full items-center justify-center');
+    screen.style.backgroundColor = '#1C1C1C';
+
+    const content = createElement('div', `${isMobile ? 'px-8' : 'px-16'} text-center space-y-8`);
+
+    // Cow mascot
+    const cowContainer = createElement('div', 'animate-float mb-6');
+    cowContainer.appendChild(createCowMascot(isMobile ? 140 : 180, true, 'encouraging'));
+    content.appendChild(cowContainer);
+
+    // Title
+    const title = createElement('h1', 'text-white mb-4');
+    title.style.fontSize = isMobile ? '28px' : '36px';
+    title.textContent = 'Lesson: Basic Greetings';
+
+    // Description
+    const description = createElement('p', 'text-[#BEBEBE] max-w-md mx-auto');
+    description.style.fontSize = isMobile ? '16px' : '18px';
+    description.textContent = 'Learn essential Cebuano greetings to start conversations confidently!';
+
+    content.appendChild(title);
+    content.appendChild(description);
+
+    // Buttons
+    const buttonContainer = createElement('div', `w-full max-w-md mx-auto space-y-3 mt-8`);
+
+    const startBtn = createButton('START LESSON', () => navigateTo('lesson-reviewer'), 'primary', true);
+    startBtn.style.height = isMobile ? '56px' : '64px';
+
+    const backBtn = createButton('BACK', navigateBack, 'secondary', true);
+    backBtn.style.height = isMobile ? '48px' : '56px';
+
+    buttonContainer.appendChild(startBtn);
+    buttonContainer.appendChild(backBtn);
+    content.appendChild(buttonContainer);
+
+    screen.appendChild(content);
+    container.appendChild(screen);
+
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+// Login Screen
+
+function renderLogin() {
+    const container = document.getElementById('content-container');
+
+    const screen = createElement('div', 'flex flex-col h-full');
+    screen.style.backgroundColor = '#1C1C1C';
+
+    // Header with back button
+    const header = createElement('div', 'flex items-center gap-4 p-4');
+    const backBtn = createElement('button', 'btn-icon');
+    backBtn.innerHTML = '<i data-lucide="arrow-left" style="width: 20px; height: 20px; color: #6BB6FF;"></i>';
+    backBtn.onclick = navigateBack;
+
+    const headerTitle = createElement('h2', 'text-white');
+    headerTitle.style.fontSize = '20px';
+    headerTitle.textContent = 'Welcome Back!';
+
+    header.appendChild(backBtn);
+    header.appendChild(headerTitle);
+    screen.appendChild(header);
+
+    // Main content
+    const content = createElement('div', 'flex-1 flex flex-col items-center justify-center px-8 gap-6');
+
+    // Cow mascot
+    const cowContainer = createElement('div', 'animate-float mb-4');
+    cowContainer.appendChild(createCowMascot(120, true, 'happy'));
+    content.appendChild(cowContainer);
+
+    // Form container
+    const form = createElement('div', 'w-full max-w-md space-y-4');
+
+    // ===== Login with Google Button =====
+    const googleBtn = createElement('button', 'w-full rounded-2xl');
+    googleBtn.style.cssText = 'height: 56px; font-size: 16px; font-weight: 600; color: #333; border: none; cursor: pointer; background: white; border-radius: 1rem; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);';
+    googleBtn.innerHTML = `
+        <svg width="20" height="20" viewBox="0 0 48 48">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+        </svg>
+        <span>Login with Google</span>
+    `;
+    googleBtn.onclick = () => firebaseGoogleLogin();
+    form.appendChild(googleBtn);
+
+    // Divider
+    const divider = createElement('div', 'flex items-center gap-3');
+    divider.style.margin = '0.5rem 0';
+    divider.innerHTML = `
+        <div style="flex: 1; height: 1px; background: #3a3a3a;"></div>
+        <span style="color: #8899aa; font-size: 13px; font-weight: 500;">or continue with email</span>
+        <div style="flex: 1; height: 1px; background: #3a3a3a;"></div>
+    `;
+    form.appendChild(divider);
+
+    // Email/Password form
+    const emailInput = createInput('Email or Username', 'text');
+    const passwordInput = createInput('Password', 'password');
+
+    const loginButton = createButton('LOG IN', () => {
+        const email = emailInput.value;
+        const password = passwordInput.value;
+
+        if (!email || !password) {
+            alert('Please fill in all fields');
+            return;
+        }
+
+        // Firebase email/password login
+        auth.signInWithEmailAndPassword(email, password)
+            .then((result) => handleAuthSuccess(result.user))
+            .catch((error) => {
+                if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+                    alert('Invalid email or password. Please try again.');
+                } else {
+                    alert('Login failed: ' + error.message);
+                }
+            });
+    }, 'primary', true);
+    loginButton.style.height = '56px';
+    loginButton.style.fontSize = '16px';
+
+    const registerLink = createElement('p', 'text-center text-[#BEBEBE]');
+    registerLink.style.fontSize = '14px';
+    registerLink.innerHTML = `Don't have an account? <a href="#" style="color: #6BB6FF; text-decoration: underline;">Register here</a>`;
+    registerLink.querySelector('a').onclick = (e) => {
+        e.preventDefault();
+        navigateTo('register');
+    };
+
+    form.appendChild(emailInput);
+    form.appendChild(passwordInput);
+    form.appendChild(loginButton);
+    form.appendChild(registerLink);
+
+    content.appendChild(form);
+    screen.appendChild(content);
+    container.appendChild(screen);
+
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+// Firebase Google Sign-In
+function firebaseGoogleLogin() {
+    auth.signInWithPopup(googleProvider)
+        .then((result) => {
+            handleAuthSuccess(result.user);
+        })
+        .catch((error) => {
+            if (error.code === 'auth/popup-closed-by-user') {
+                // User closed popup, do nothing
+                return;
+            }
+            console.error('Google login error:', error);
+            alert('Google login failed: ' + error.message);
+        });
+}
+
+// Handle successful auth — save to Firestore + navigate
+function handleAuthSuccess(user) {
+    AppState.userData.name = user.displayName || 'Language Learner';
+    AppState.userData.email = user.email || '';
+    AppState.userData.photoURL = user.photoURL || '';
+    AppState.userData.uid = user.uid;
+    Storage.save('userData', AppState.userData);
+
+    // Save/update user profile in Firestore
+    db.collection('users').doc(user.uid).set({
+        name: AppState.userData.name,
+        email: AppState.userData.email,
+        photoURL: AppState.userData.photoURL,
+        streak: AppState.userData.streak || 0,
+        totalXP: AppState.userData.totalXP || 0,
+        currentLevel: AppState.userData.currentLevel || 1,
+        completedLessons: AppState.userData.completedLessons || [],
+        lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true })
+    .then(() => navigateTo('dashboard'))
+    .catch(() => navigateTo('dashboard'));
+}
+
+// Main Menu Screen
+
+function renderMainMenu() {
+    const container = document.getElementById('content-container');
+
+    const screen = createElement('div', 'flex flex-col h-full relative');
+    screen.style.background = 'radial-gradient(ellipse at 50% 20%, #1a2332 0%, #141a23 40%, #0d1117 100%)';
+    screen.style.overflow = 'hidden';
+
+    // Animated background glow
+    const bgGlow = createElement('div', 'absolute');
+    bgGlow.style.cssText = 'top: -50%; left: 50%; transform: translateX(-50%); width: 300px; height: 300px; background: radial-gradient(circle, rgba(26,115,232,0.15) 0%, transparent 70%); border-radius: 50%; pointer-events: none; animation: float 6s ease-in-out infinite;';
+    screen.appendChild(bgGlow);
+
+    // Sparkle effect
+    screen.appendChild(createSparkleEffect());
+
+    // Admin button (top-right, subtle)
+    const adminBtn = createElement('button', 'absolute top-4 right-4 z-20 p-2 rounded-lg transition-all hover:scale-110');
+    adminBtn.style.cssText = 'background: rgba(42,42,42,0.6); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);';
+    adminBtn.innerHTML = '<i data-lucide="shield" style="width: 18px; height: 18px; color: #6BB6FF;"></i>';
+    adminBtn.onclick = () => navigateTo('admin-login');
+    screen.appendChild(adminBtn);
+
+    // === Main Content Area ===
+    const mainContent = createElement('div', 'flex-1 flex flex-col items-center justify-center z-10');
+    mainContent.style.padding = '2rem 1.5rem 0';
+
+    // Cow mascot with glow
+    const cowWrapper = createElement('div', 'animate-float relative');
+    const cowGlow = createElement('div', 'absolute');
+    cowGlow.style.cssText = 'bottom: -10px; left: 50%; transform: translateX(-50%); width: 120px; height: 20px; background: radial-gradient(ellipse, rgba(26,115,232,0.2) 0%, transparent 70%); border-radius: 50%;';
+    cowWrapper.appendChild(createCowMascot(150, true, 'waving'));
+    cowWrapper.appendChild(cowGlow);
+    mainContent.appendChild(cowWrapper);
+
+    // Title with gradient text effect
+    const titleContainer = createElement('div', 'text-center');
+    titleContainer.style.marginTop = '1rem';
+
+    const title = createElement('h1', 'text-white');
+    title.style.cssText = 'font-size: 42px; font-weight: 700; letter-spacing: -1px; background: linear-gradient(135deg, #ffffff 0%, #e0e8f0 50%, #6BB6FF 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;';
+    title.textContent = 'CebuLingo';
+
+    const subtitle = createElement('p', '');
+    subtitle.style.cssText = 'font-size: 16px; font-weight: 500; color: #8899aa; margin-top: 0.5rem; letter-spacing: 0.5px;';
+    subtitle.textContent = 'Learn Cebuano in Minutes';
+
+    titleContainer.appendChild(title);
+    titleContainer.appendChild(subtitle);
+    mainContent.appendChild(titleContainer);
+
+    screen.appendChild(mainContent);
+
+    // === Bottom Section: Buttons + Nav ===
+    const bottomSection = createElement('div', 'z-10');
+    bottomSection.style.padding = '1.5rem';
+    bottomSection.style.width = '100%';
+
+    // Buttons
+    const buttonsContainer = createElement('div', 'space-y-3');
+    buttonsContainer.style.marginBottom = '1.25rem';
+
+    const getStartedBtn = createElement('button', 'w-full rounded-2xl');
+    getStartedBtn.style.cssText = 'height: 54px; font-size: 15px; font-weight: 700; color: white; border: none; cursor: pointer; background: linear-gradient(135deg, #1A73E8 0%, #4DACFF 100%); box-shadow: 0 6px 24px rgba(26,115,232,0.4); border-radius: 1rem; letter-spacing: 1px; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 8px;';
+    getStartedBtn.innerHTML = '<span>GET STARTED</span>';
+    getStartedBtn.onclick = () => navigateTo('quick-intro');
+
+    const loginBtn = createElement('button', 'w-full rounded-2xl');
+    loginBtn.style.cssText = 'height: 54px; font-size: 15px; font-weight: 600; color: #ccc; border: 1.5px solid #3a3a3a; cursor: pointer; background: rgba(42,42,42,0.5); backdrop-filter: blur(8px); border-radius: 1rem; letter-spacing: 0.5px; transition: all 0.3s ease;';
+    loginBtn.textContent = 'I ALREADY HAVE AN ACCOUNT';
+    loginBtn.onclick = () => navigateTo('login');
+
+    buttonsContainer.appendChild(getStartedBtn);
+    buttonsContainer.appendChild(loginBtn);
+    bottomSection.appendChild(buttonsContainer);
+
+    // Bottom Nav Bar
+    const navBar = createElement('div', 'flex items-center justify-around');
+    navBar.style.cssText = 'background: rgba(30,30,30,0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-radius: 1rem; padding: 0.6rem 0.5rem; border: 1px solid rgba(255,255,255,0.06);';
+
+    const navItems = [
+        { icon: 'layout-dashboard', label: 'Dashboard', action: () => navigateTo('dashboard'), primary: true },
+        { icon: 'trophy', label: 'Ranks', action: () => navigateTo('leaderboard') },
+        { icon: 'book-open', label: 'Modules', action: () => navigateTo('modules') },
+        { icon: 'user', label: 'Profile', action: () => navigateTo('profile') }
+    ];
+
+    navItems.forEach(item => {
+        const navBtn = createElement('button', 'flex flex-col items-center gap-1 transition-all');
+        navBtn.style.cssText = `border: none; cursor: pointer; padding: 0.5rem 0.85rem; border-radius: 0.75rem; background: ${item.primary ? 'linear-gradient(135deg, #1A73E8 0%, #4DACFF 100%)' : 'transparent'};`;
+        navBtn.innerHTML = `
+            <i data-lucide="${item.icon}" style="width: 20px; height: 20px; color: ${item.primary ? 'white' : '#8899aa'};"></i>
+            <span style="font-size: 10px; color: ${item.primary ? 'white' : '#8899aa'}; font-weight: 500;">${item.label}</span>
+        `;
+        navBtn.onclick = item.action;
+        navBar.appendChild(navBtn);
+    });
+
+    bottomSection.appendChild(navBar);
+    screen.appendChild(bottomSection);
+    container.appendChild(screen);
+
+    // Initialize icons
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+
+// Module List Screen
+
+
+function renderModules() {
+    const container = document.getElementById('content-container');
+    const isMobile = AppState.isMobile;
+
+    const screen = createElement('div', 'flex flex-col h-full overflow-y-auto');
+    screen.style.backgroundColor = '#1C1C1C';
+
+    // Header
+    const header = createElement('div', 'flex items-center justify-between p-4 border-b border-[#2A2A2A]');
+    const logo = createElement('h1', 'text-white');
+    logo.style.cssText = 'font-size: 18px; font-weight: 700; background: linear-gradient(135deg, #fff 0%, #6BB6FF 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;';
+    logo.textContent = 'Modules';
+
+    header.appendChild(logo);
+    screen.appendChild(header);
+
+    // Content
+    const content = createElement('div', `flex-1 ${isMobile ? 'px-6 py-6' : 'px-12 py-8'}`);
+
+    const modules = [
+        { id: 1, title: 'Basics', icon: '\uD83C\uDF1F', lessons: 5, completed: 5, locked: false },
+        { id: 2, title: 'Family & Friends', icon: '\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67', lessons: 5, completed: 2, locked: false },
+        { id: 3, title: 'Food & Dining', icon: '\uD83C\uDF7D\uFE0F', lessons: 5, completed: 0, locked: true },
+        { id: 4, title: 'Numbers & Time', icon: '\u23F0', lessons: 5, completed: 0, locked: true },
+        { id: 5, title: 'Shopping', icon: '\uD83D\uDECD\uFE0F', lessons: 5, completed: 0, locked: true },
+        { id: 6, title: 'Travel', icon: '\u2708\uFE0F', lessons: 5, completed: 0, locked: true }
+    ];
+
+    const modulesGrid = createElement('div', `grid ${isMobile ? 'grid-1' : 'grid-2'} gap-4`);
+
+    modules.forEach(module => {
+        const card = createElement('div', `card p-6 transition-all ${module.locked ? 'opacity-50' : 'hover:scale-[1.02] cursor-pointer'}`);
+
+        const topRow = createElement('div', 'flex items-start justify-between mb-4');
+
+        const leftSide = createElement('div', 'flex items-center gap-4');
+        const icon = createElement('div', 'text-5xl');
+        icon.textContent = module.icon;
+
+        const info = createElement('div', '');
+        const moduleTitle = createElement('h3', 'text-white mb-1');
+        moduleTitle.style.fontSize = isMobile ? '18px' : '22px';
+        moduleTitle.textContent = module.title;
+
+        const lessonsText = createElement('p', 'text-[#BEBEBE]');
+        lessonsText.style.fontSize = '14px';
+        lessonsText.textContent = `${module.lessons} lessons`;
+
+        info.appendChild(moduleTitle);
+        info.appendChild(lessonsText);
+        leftSide.appendChild(icon);
+        leftSide.appendChild(info);
+
+        const status = createElement('div', '');
+        if (module.locked) {
+            status.innerHTML = '<i data-lucide="lock" style="width: 24px; height: 24px; color: #666;"></i>';
+        } else {
+            status.innerHTML = `<i data-lucide="check-circle" style="width: 24px; height: 24px; color: #10B981;"></i>`;
+        }
+
+        topRow.appendChild(leftSide);
+        topRow.appendChild(status);
+
+        // Progress bar
+        if (!module.locked) {
+            const progressContainer = createElement('div', 'mt-4');
+            const progressBar = createElement('div', 'progress-bar');
+            const progressFill = createElement('div', 'progress-bar-fill');
+            progressFill.style.width = `${(module.completed / module.lessons) * 100}%`;
+            progressBar.appendChild(progressFill);
+
+            const progressText = createElement('p', 'text-[#BEBEBE] mt-2');
+            progressText.style.fontSize = '12px';
+            progressText.textContent = `${module.completed}/${module.lessons} completed`;
+
+            progressContainer.appendChild(progressBar);
+            progressContainer.appendChild(progressText);
+            card.appendChild(progressContainer);
+        }
+
+        card.appendChild(topRow);
+
+        if (!module.locked) {
+            card.onclick = () => navigateTo('lesson-start');
+        }
+
+        modulesGrid.appendChild(card);
+    });
+
+    content.appendChild(modulesGrid);
+    screen.appendChild(content);
+
+    // Bottom spacer and nav
+    const spacer = createElement('div', '');
+    spacer.style.height = '80px';
+    screen.appendChild(spacer);
+    screen.appendChild(createBottomNav('modules'));
+
+    container.appendChild(screen);
+
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+// Motivation Screen
+
+function renderMotivation() {
+    const container = document.getElementById('content-container');
+    const isMobile = AppState.isMobile;
+
+    const screen = createElement('div', 'flex flex-col h-full');
+    screen.style.backgroundColor = '#1C1C1C';
+
+    screen.appendChild(createProgressHeader(100, navigateBack));
+
+    const content = createElement('div', `flex-1 flex flex-col items-center justify-center ${isMobile ? 'px-8' : 'px-16'} gap-8 text-center`);
+
+    // Celebrating cow
+    const cowContainer = createElement('div', '');
+    cowContainer.appendChild(createCowMascot(isMobile ? 140 : 180, true, 'celebrating'));
+    content.appendChild(cowContainer);
+
+    // Title
+    const title = createElement('h1', 'text-white');
+    title.style.fontSize = isMobile ? '32px' : '42px';
+    title.textContent = 'You\'re All Set!';
+
+    // Description
+    const description = createElement('p', 'text-[#BEBEBE] max-w-md');
+    description.style.fontSize = isMobile ? '16px' : '18px';
+    description.textContent = 'Get ready to start your Cebuano learning journey! Let\'s begin with your first lesson.';
+
+    content.appendChild(title);
+    content.appendChild(description);
+
+    // Sparkle effect
+    content.appendChild(createSparkleEffect());
+
+    // Button
+    const buttonContainer = createElement('div', `w-full ${isMobile ? 'max-w-md' : 'max-w-lg'} mt-4`);
+    const startBtn = createButton('START LEARNING', () => navigateTo('dashboard'), 'primary', true);
+    startBtn.style.height = isMobile ? '56px' : '64px';
+    startBtn.style.fontSize = isMobile ? '16px' : '18px';
+    buttonContainer.appendChild(startBtn);
+    content.appendChild(buttonContainer);
+
+    screen.appendChild(content);
+    container.appendChild(screen);
+
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+// Profile Screen
+
+function renderProfile() {
+    const container = document.getElementById('content-container');
+    const isMobile = AppState.isMobile;
+
+    const screen = createElement('div', 'flex flex-col h-full overflow-y-auto');
+    screen.style.backgroundColor = '#1C1C1C';
+
+    // Header
+    const header = createElement('div', 'flex items-center justify-between p-4 border-b border-[#2A2A2A]');
+    const title = createElement('h1', 'text-white');
+    title.style.cssText = 'font-size: 18px; font-weight: 700; background: linear-gradient(135deg, #fff 0%, #6BB6FF 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;';
+    title.textContent = 'Profile';
+
+    const settingsBtn = createElement('button', 'btn-icon');
+    settingsBtn.innerHTML = '<i data-lucide="settings" style="width: 20px; height: 20px; color: #6BB6FF;"></i>';
+    settingsBtn.onclick = () => navigateTo('settings');
+
+    header.appendChild(title);
+    header.appendChild(settingsBtn);
+    screen.appendChild(header);
+
+    // Content
+    const content = createElement('div', `flex-1 ${isMobile ? 'px-6 py-6' : 'px-12 py-8'}`);
+
+    // Profile header
+    const profileHeader = createElement('div', 'text-center mb-8');
+
+    let avatar;
+    if (AppState.userData.photoURL) {
+        avatar = createElement('img', 'w-24 h-24 mx-auto mb-4 rounded-full');
+        avatar.src = AppState.userData.photoURL;
+        avatar.style.cssText = 'width: 96px; height: 96px; border-radius: 50%; object-fit: cover; border: 3px solid #1A73E8;';
+    } else {
+        avatar = createElement('div', 'w-24 h-24 mx-auto mb-4 rounded-full flex items-center justify-center');
+        avatar.style.background = 'linear-gradient(135deg, #1A73E8 0%, #6BB6FF 100%)';
+        avatar.style.fontSize = '48px';
+        avatar.textContent = '\uD83D\uDC2E';
+    }
+
+    const userName = createElement('h2', 'text-white mb-2');
+    userName.style.fontSize = '24px';
+    userName.textContent = AppState.userData.name;
+
+    const userLevel = createElement('p', 'text-[#BEBEBE]');
+    userLevel.style.fontSize = '16px';
+    userLevel.textContent = `Level ${AppState.userData.currentLevel}`;
+
+    profileHeader.appendChild(avatar);
+    profileHeader.appendChild(userName);
+    profileHeader.appendChild(userLevel);
+    content.appendChild(profileHeader);
+
+    // Stats grid
+    const statsGrid = createElement('div', `grid ${isMobile ? 'grid-2' : 'grid-3'} gap-4 mb-8`);
+
+    const stats = [
+        { label: 'Day Streak', value: AppState.userData.streak, icon: 'flame', color: '#FF6B35' },
+        { label: 'Total XP', value: AppState.userData.totalXP, icon: 'star', color: '#FFD700' },
+        { label: 'Lessons Done', value: 7, icon: 'check-circle', color: '#10B981' }
+    ];
+
+    stats.forEach(stat => {
+        const statCard = createElement('div', 'stat-card');
+
+        const iconContainer = createElement('div', 'mb-3');
+        iconContainer.innerHTML = `<i data-lucide="${stat.icon}" style="width: 40px; height: 40px; color: ${stat.color}; fill: ${stat.icon === 'star' ? stat.color : 'none'};"></i>`;
+
+        const value = createElement('div', 'stat-value');
+        value.textContent = stat.value;
+
+        const label = createElement('div', 'stat-label');
+        label.textContent = stat.label;
+
+        statCard.appendChild(iconContainer);
+        statCard.appendChild(value);
+        statCard.appendChild(label);
+        statsGrid.appendChild(statCard);
+    });
+
+    content.appendChild(statsGrid);
+
+    // Achievements section
+    const achievementsTitle = createElement('h3', 'text-white mb-4');
+    achievementsTitle.style.fontSize = isMobile ? '20px' : '24px';
+    achievementsTitle.textContent = 'Achievements';
+    content.appendChild(achievementsTitle);
+
+    const achievements = [
+        { id: 1, title: 'First Steps', desc: 'Complete your first lesson', icon: '\uD83C\uDFAF', unlocked: true },
+        { id: 2, title: 'Week Warrior', desc: 'Maintain a 7-day streak', icon: '\uD83D\uDD25', unlocked: true },
+        { id: 3, title: 'XP Master', desc: 'Earn 1000 XP', icon: '\u2B50', unlocked: true },
+        { id: 4, title: 'Perfect Score', desc: 'Get 3 stars on any lesson', icon: '\uD83D\uDCAF', unlocked: true },
+        { id: 5, title: 'Unit Champion', desc: 'Complete an entire unit', icon: '\uD83C\uDFC6', unlocked: false },
+        { id: 6, title: 'Polyglot', desc: 'Complete all modules', icon: '\uD83C\uDF1F', unlocked: false }
+    ];
+
+    const achievementsGrid = createElement('div', 'space-y-3');
+
+    achievements.forEach(achievement => {
+        const achCard = createElement('div', `achievement ${achievement.unlocked ? '' : 'locked'}`);
+
+        const achIcon = createElement('div', 'achievement-icon');
+        achIcon.style.background = achievement.unlocked
+            ? 'linear-gradient(135deg, #1A73E8 0%, #6BB6FF 100%)'
+            : '#2A2A2A';
+        achIcon.textContent = achievement.icon;
+
+        const achInfo = createElement('div', 'flex-1');
+        const achTitle = createElement('p', `text-white mb-1 ${achievement.unlocked ? '' : 'opacity-50'}`);
+        achTitle.style.fontSize = '16px';
+        achTitle.style.fontWeight = '600';
+        achTitle.textContent = achievement.title;
+
+        const achDesc = createElement('p', `text-[#BEBEBE] ${achievement.unlocked ? '' : 'opacity-50'}`);
+        achDesc.style.fontSize = '14px';
+        achDesc.textContent = achievement.desc;
+
+        achInfo.appendChild(achTitle);
+        achInfo.appendChild(achDesc);
+
+        achCard.appendChild(achIcon);
+        achCard.appendChild(achInfo);
+
+        if (achievement.unlocked) {
+            const checkmark = createElement('div', '');
+            checkmark.innerHTML = '<i data-lucide="check" style="width: 24px; height: 24px; color: #10B981;"></i>';
+            achCard.appendChild(checkmark);
+        }
+
+        achievementsGrid.appendChild(achCard);
+    });
+
+    content.appendChild(achievementsGrid);
+
+    content.appendChild(achievementsGrid);
+
+    // Bottom spacer and nav
+    const spacer = createElement('div', '');
+    spacer.style.height = '80px';
+    screen.appendChild(spacer);
+    screen.appendChild(createBottomNav('profile'));
+
+    screen.appendChild(content);
+    container.appendChild(screen);
+
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+// Settings Screen
+
+function renderSettings() {
+    const container = document.getElementById('content-container');
+
+    const screen = createElement('div', 'flex flex-col h-full overflow-y-auto');
+    screen.style.backgroundColor = '#1C1C1C';
+
+    // Header
+    const header = createElement('div', 'flex items-center gap-4 p-4 border-b');
+    header.style.borderColor = '#2A2A2A';
+    const backBtn = createElement('button', 'btn-icon');
+    backBtn.innerHTML = '<i data-lucide="arrow-left" style="width: 20px; height: 20px; color: #6BB6FF;"></i>';
+    backBtn.onclick = navigateBack;
+
+    const title = createElement('h1', 'text-white flex-1');
+    title.style.fontSize = '20px';
+    title.textContent = 'Settings';
+
+    header.appendChild(backBtn);
+    header.appendChild(title);
+    screen.appendChild(header);
+
+    // Content
+    const content = createElement('div', 'flex-1 px-5 py-5');
+
+    // === Account Section ===
+    const accountLabel = createElement('p', '');
+    accountLabel.style.cssText = 'font-size: 12px; font-weight: 600; color: #6BB6FF; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.75rem;';
+    accountLabel.textContent = 'Account';
+    content.appendChild(accountLabel);
+
+    const accountCard = createElement('div', '');
+    accountCard.style.cssText = 'background: #222; border-radius: 1rem; padding: 1rem; margin-bottom: 1.5rem; border: 1px solid #2A2A2A;';
+
+    // Profile row
+    const profileRow = createElement('div', 'flex items-center gap-3');
+    profileRow.style.cssText = 'padding-bottom: 0.75rem; border-bottom: 1px solid #2A2A2A; margin-bottom: 0.75rem;';
+    if (AppState.userData.photoURL) {
+        const img = createElement('img', '');
+        img.src = AppState.userData.photoURL;
+        img.style.cssText = 'width: 44px; height: 44px; border-radius: 50%; object-fit: cover; border: 2px solid #1A73E8;';
+        profileRow.appendChild(img);
+    } else {
+        const avatar = createElement('div', 'flex items-center justify-center');
+        avatar.style.cssText = 'width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, #1A73E8 0%, #6BB6FF 100%); font-size: 22px;';
+        avatar.textContent = '\uD83D\uDC2E';
+        profileRow.appendChild(avatar);
+    }
+    const nameInfo = createElement('div', 'flex-1');
+    const nameText = createElement('p', 'text-white');
+    nameText.style.cssText = 'font-size: 16px; font-weight: 600;';
+    nameText.textContent = AppState.userData.name;
+    const emailText = createElement('p', '');
+    emailText.style.cssText = 'font-size: 13px; color: #8899aa;';
+    emailText.textContent = AppState.userData.email || 'No email';
+    nameInfo.appendChild(nameText);
+    nameInfo.appendChild(emailText);
+    profileRow.appendChild(nameInfo);
+    accountCard.appendChild(profileRow);
+
+    // Level & XP row
+    const statsRow = createElement('div', 'flex items-center justify-between');
+    statsRow.innerHTML = `
+        <span style="color: #BEBEBE; font-size: 14px;">Level ${AppState.userData.currentLevel}</span>
+        <span style="color: #FFD700; font-size: 14px; font-weight: 600;">${AppState.userData.totalXP} XP</span>
+    `;
+    accountCard.appendChild(statsRow);
+    content.appendChild(accountCard);
+
+    // === Preferences Section ===
+    const prefsLabel = createElement('p', '');
+    prefsLabel.style.cssText = 'font-size: 12px; font-weight: 600; color: #6BB6FF; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.75rem;';
+    prefsLabel.textContent = 'Preferences';
+    content.appendChild(prefsLabel);
+
+    const prefsCard = createElement('div', '');
+    prefsCard.style.cssText = 'background: #222; border-radius: 1rem; padding: 0; margin-bottom: 1.5rem; border: 1px solid #2A2A2A; overflow: hidden;';
+
+    const prefItems = [
+        { icon: 'volume-2', label: 'Text-to-Speech', key: 'ttsEnabled', default: true },
+        { icon: 'music', label: 'Sound Effects', key: 'soundEnabled', default: true },
+        { icon: 'bell', label: 'Notifications', key: 'notificationsEnabled', default: false }
+    ];
+
+    prefItems.forEach((pref, index) => {
+        const row = createElement('div', 'flex items-center justify-between');
+        row.style.cssText = `padding: 0.85rem 1rem; ${index < prefItems.length - 1 ? 'border-bottom: 1px solid #2A2A2A;' : ''}`;
+
+        const leftPart = createElement('div', 'flex items-center gap-3');
+        leftPart.innerHTML = `<i data-lucide="${pref.icon}" style="width: 18px; height: 18px; color: #8899aa;"></i><span style="color: white; font-size: 15px;">${pref.label}</span>`;
+
+        const savedVal = Storage.load(pref.key);
+        const isOn = savedVal !== null ? savedVal : pref.default;
+
+        const toggle = createElement('button', '');
+        toggle.style.cssText = `width: 48px; height: 28px; border-radius: 14px; border: none; cursor: pointer; position: relative; transition: background 0.3s ease; background: ${isOn ? '#1A73E8' : '#3a3a3a'};`;
+        const knob = createElement('div', '');
+        knob.style.cssText = `width: 22px; height: 22px; border-radius: 50%; background: white; position: absolute; top: 3px; transition: left 0.3s ease; left: ${isOn ? '23px' : '3px'}; box-shadow: 0 1px 3px rgba(0,0,0,0.3);`;
+        toggle.appendChild(knob);
+
+        toggle.onclick = () => {
+            const newVal = !Storage.load(pref.key);
+            Storage.save(pref.key, newVal);
+            toggle.style.background = newVal ? '#1A73E8' : '#3a3a3a';
+            knob.style.left = newVal ? '23px' : '3px';
+        };
+
+        row.appendChild(leftPart);
+        row.appendChild(toggle);
+        prefsCard.appendChild(row);
+    });
+
+    content.appendChild(prefsCard);
+
+    // === About Section ===
+    const aboutLabel = createElement('p', '');
+    aboutLabel.style.cssText = 'font-size: 12px; font-weight: 600; color: #6BB6FF; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.75rem;';
+    aboutLabel.textContent = 'About';
+    content.appendChild(aboutLabel);
+
+    const aboutCard = createElement('div', '');
+    aboutCard.style.cssText = 'background: #222; border-radius: 1rem; padding: 0; margin-bottom: 1.5rem; border: 1px solid #2A2A2A; overflow: hidden;';
+    const aboutItems = [
+        { label: 'App Version', value: '1.0.0' },
+        { label: 'Built with', value: '\u2764\uFE0F by CebuLingo Team' }
+    ];
+    aboutItems.forEach((item, index) => {
+        const row = createElement('div', 'flex items-center justify-between');
+        row.style.cssText = `padding: 0.85rem 1rem; ${index < aboutItems.length - 1 ? 'border-bottom: 1px solid #2A2A2A;' : ''}`;
+        row.innerHTML = `<span style="color: #BEBEBE; font-size: 15px;">${item.label}</span><span style="color: white; font-size: 15px; font-weight: 500;">${item.value}</span>`;
+        aboutCard.appendChild(row);
+    });
+    content.appendChild(aboutCard);
+
+    // === Danger Zone ===
+    const dangerLabel = createElement('p', '');
+    dangerLabel.style.cssText = 'font-size: 12px; font-weight: 600; color: #EF4444; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.75rem;';
+    dangerLabel.textContent = 'Danger Zone';
+    content.appendChild(dangerLabel);
+
+    const dangerCard = createElement('div', '');
+    dangerCard.style.cssText = 'background: #222; border-radius: 1rem; padding: 0; margin-bottom: 2rem; border: 1px solid rgba(239,68,68,0.2); overflow: hidden;';
+
+    // Logout
+    const logoutRow = createElement('button', 'flex items-center gap-3 w-full');
+    logoutRow.style.cssText = 'padding: 0.85rem 1rem; border: none; background: transparent; cursor: pointer; border-bottom: 1px solid #2A2A2A; text-align: left;';
+    logoutRow.innerHTML = '<i data-lucide="log-out" style="width: 18px; height: 18px; color: #EF4444;"></i><span style="color: #EF4444; font-size: 15px; font-weight: 500;">Log Out</span>';
+    logoutRow.onclick = () => {
+        auth.signOut().then(() => {
+            AppState.userData = { name: 'Language Learner', streak: 0, totalXP: 0, currentLevel: 1, completedLessons: [] };
+            Storage.clear('userData');
+            navigateTo('main-menu');
+        });
+    };
+    dangerCard.appendChild(logoutRow);
+
+    // Delete account
+    const deleteRow = createElement('button', 'flex items-center gap-3 w-full');
+    deleteRow.style.cssText = 'padding: 0.85rem 1rem; border: none; background: transparent; cursor: pointer; text-align: left;';
+    deleteRow.innerHTML = '<i data-lucide="trash-2" style="width: 18px; height: 18px; color: #EF4444;"></i><span style="color: #EF4444; font-size: 15px; font-weight: 500;">Delete Account</span>';
+    deleteRow.onclick = () => {
+        if (confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
+            const user = auth.currentUser;
+            if (user) {
+                db.collection('users').doc(user.uid).delete()
+                    .then(() => user.delete())
+                    .then(() => {
+                        AppState.userData = { name: 'Language Learner', streak: 0, totalXP: 0, currentLevel: 1, completedLessons: [] };
+                        Storage.clear('userData');
+                        navigateTo('main-menu');
+                    })
+                    .catch((err) => alert('Failed to delete account: ' + err.message));
+            }
+        }
+    };
+    dangerCard.appendChild(deleteRow);
+    content.appendChild(dangerCard);
+
+    screen.appendChild(content);
+
+    // Bottom spacer and nav
+    const spacer = createElement('div', '');
+    spacer.style.height = '80px';
+    screen.appendChild(spacer);
+    screen.appendChild(createBottomNav('settings'));
+
+    container.appendChild(screen);
+
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+// Question Screens
+
+function renderQuestion1() {
+    const container = document.getElementById('content-container');
+    const isMobile = AppState.isMobile;
+
+    const screen = createElement('div', 'flex flex-col h-full');
+    screen.style.backgroundColor = '#1C1C1C';
+
+    screen.appendChild(createProgressHeader(25, navigateBack));
+
+    const content = createElement('div', `flex-1 flex flex-col items-center justify-center ${isMobile ? 'px-8' : 'px-16'} gap-6`);
+
+    const title = createElement('h2', 'text-white text-center');
+    title.style.fontSize = isMobile ? '24px' : '32px';
+    title.textContent = 'Why do you want to learn Cebuano?';
+
+    content.appendChild(title);
+
+    const options = [
+        { text: 'Travel & Culture', icon: '\u2708\uFE0F' },
+        { text: 'Family & Friends', icon: '\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67' },
+        { text: 'Work & Business', icon: '\uD83D\uDCBC' },
+        { text: 'Personal Interest', icon: '\uD83D\uDCA1' }
+    ];
+
+    const optionsContainer = createElement('div', `w-full ${isMobile ? 'max-w-md' : 'max-w-lg'} space-y-3`);
+
+    options.forEach(option => {
+        const btn = createElement('button', 'w-full card p-4 flex items-center gap-4 transition-all hover:scale-[1.02]');
+        btn.style.cursor = 'pointer';
+        btn.innerHTML = `
+            <span style="font-size: 32px;">${option.icon}</span>
+            <span class="text-white" style="fontSize: ${isMobile ? '16px' : '18px'};">${option.text}</span>
+        `;
+        btn.onclick = () => navigateTo('question-2');
+        optionsContainer.appendChild(btn);
+    });
+    
+    content.appendChild(optionsContainer);
+    screen.appendChild(content);
+    container.appendChild(screen);
+    
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+function renderQuestion2() {
+    const container = document.getElementById('content-container');
+    const isMobile = AppState.isMobile;
+    
+    const screen = createElement('div', 'flex flex-col h-full');
+    screen.style.backgroundColor = '#1C1C1C';
+    
+    screen.appendChild(createProgressHeader(50, navigateBack));
+    
+    const content = createElement('div', `flex-1 flex flex-col items-center justify-center ${isMobile ? 'px-8' : 'px-16'} gap-6`);
+    
+    const title = createElement('h2', 'text-white text-center');
+    title.style.fontSize = isMobile ? '24px' : '32px';
+    title.textContent = 'How much time can you dedicate daily?';
+    
+    content.appendChild(title);
+    
+    const options = [
+        { text: '5 minutes', desc: 'Just the basics' },
+        { text: '10 minutes', desc: 'Nice and casual' },
+        { text: '15 minutes', desc: 'Getting serious' },
+        { text: '20+ minutes', desc: 'Super committed!' }
+    ];
+    
+    const optionsContainer = createElement('div', `w-full ${isMobile ? 'max-w-md' : 'max-w-lg'} space-y-3`);
+    
+    options.forEach(option => {
+        const btn = createElement('button', 'w-full card p-4 flex flex-col items-start gap-1 transition-all hover:scale-[1.02]');
+        btn.style.cursor = 'pointer';
+        btn.innerHTML = `
+            <span class="text-white" style="fontSize: ${isMobile ? '16px' : '18px'}; font-weight: 600;">${option.text}</span>
+            <span class="text-[#BEBEBE]" style="fontSize: ${isMobile ? '13px' : '14px'};">${option.desc}</span>
+        `;
+        btn.onclick = () => navigateTo('question-3');
+        optionsContainer.appendChild(btn);
+    });
+    
+    content.appendChild(optionsContainer);
+    screen.appendChild(content);
+    container.appendChild(screen);
+    
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+function renderQuestion3() {
+    const container = document.getElementById('content-container');
+    const isMobile = AppState.isMobile;
+    
+    const screen = createElement('div', 'flex flex-col h-full');
+    screen.style.backgroundColor = '#1C1C1C';
+    
+    screen.appendChild(createProgressHeader(75, navigateBack));
+    
+    const content = createElement('div', `flex-1 flex flex-col items-center justify-center ${isMobile ? 'px-8' : 'px-16'} gap-6`);
+    
+    const title = createElement('h2', 'text-white text-center');
+    title.style.fontSize = isMobile ? '24px' : '32px';
+    title.textContent = 'What\'s your current level?';
+    
+    content.appendChild(title);
+    
+    const options = [
+        { text: 'Complete Beginner', desc: 'Never studied before' },
+        { text: 'Some Basics', desc: 'Know a few words' },
+        { text: 'Intermediate', desc: 'Can have basic conversations' },
+        { text: 'Advanced', desc: 'Want to improve fluency' }
+    ];
+    
+    const optionsContainer = createElement('div', `w-full ${isMobile ? 'max-w-md' : 'max-w-lg'} space-y-3`);
+    
+    options.forEach(option => {
+        const btn = createElement('button', 'w-full card p-4 flex flex-col items-start gap-1 transition-all hover:scale-[1.02]');
+        btn.style.cursor = 'pointer';
+        btn.innerHTML = `
+            <span class="text-white" style="fontSize: ${isMobile ? '16px' : '18px'}; font-weight: 600;">${option.text}</span>
+            <span class="text-[#BEBEBE]" style="fontSize: ${isMobile ? '13px' : '14px'};">${option.desc}</span>
+        `;
+        btn.onclick = () => navigateTo('motivation');
+        optionsContainer.appendChild(btn);
+    });
+    
+    content.appendChild(optionsContainer);
+    screen.appendChild(content);
+    container.appendChild(screen);
+    
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+// Quick Intro Screen
+
+function renderQuickIntro() {
+    const container = document.getElementById('content-container');
+    const isMobile = AppState.isMobile;
+    
+    const screen = createElement('div', 'flex flex-col h-full');
+    screen.style.backgroundColor = '#1C1C1C';
+    
+    // Progress header
+    screen.appendChild(createProgressHeader(10, navigateBack));
+    
+    // Content
+    const content = createElement('div', `flex-1 flex flex-col items-center justify-center ${isMobile ? 'px-8' : 'px-16'} gap-8`);
+    
+    // Cow mascot
+    const cowContainer = createElement('div', 'animate-float');
+    cowContainer.appendChild(createCowMascot(isMobile ? 140 : 180, true, 'waving'));
+    content.appendChild(cowContainer);
+    
+    // Text
+    const title = createElement('h1', 'text-white text-center');
+    title.style.fontSize = isMobile ? '28px' : '36px';
+    title.textContent = 'Welcome to CebuLingo!';
+    
+    const description = createElement('p', 'text-[#BEBEBE] text-center max-w-md');
+    description.style.fontSize = isMobile ? '16px' : '18px';
+    description.textContent = 'Let\'s personalize your learning experience with a few quick questions.';
+    
+    content.appendChild(title);
+    content.appendChild(description);
+    
+    // Continue button
+    const buttonContainer = createElement('div', `w-full ${isMobile ? 'max-w-md' : 'max-w-lg'} mt-8`);
+    const continueBtn = createButton('CONTINUE', () => navigateTo('question-1'), 'primary', true);
+    continueBtn.style.height = isMobile ? '56px' : '64px';
+    buttonContainer.appendChild(continueBtn);
+    content.appendChild(buttonContainer);
+    
+    screen.appendChild(content);
+    container.appendChild(screen);
+    
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+// Register Screen
+
+function renderRegister() {
+    const container = document.getElementById('content-container');
+    
+    const screen = createElement('div', 'flex flex-col h-full');
+    screen.style.backgroundColor = '#1C1C1C';
+    
+    // Header with back button
+    const header = createElement('div', 'flex items-center gap-4 p-4');
+    const backBtn = createElement('button', 'btn-icon');
+    backBtn.innerHTML = '<i data-lucide="arrow-left" style="width: 20px; height: 20px; color: #6BB6FF;"></i>';
+    backBtn.onclick = navigateBack;
+    
+    const headerTitle = createElement('h2', 'text-white');
+    headerTitle.style.fontSize = '20px';
+    headerTitle.textContent = 'Create Account';
+    
+    header.appendChild(backBtn);
+    header.appendChild(headerTitle);
+    screen.appendChild(header);
+    
+    // Main content
+    const content = createElement('div', 'flex-1 flex flex-col items-center justify-center px-8 gap-6');
+    
+    // Cow mascot
+    const cowContainer = createElement('div', 'animate-float mb-4');
+    cowContainer.appendChild(createCowMascot(100, true, 'encouraging'));
+    content.appendChild(cowContainer);
+    
+    // Form
+    const form = createElement('div', 'w-full max-w-md space-y-4');
+
+    // Google Sign-Up button
+    const googleBtn = createElement('button', 'w-full rounded-2xl');
+    googleBtn.style.cssText = 'height: 56px; font-size: 16px; font-weight: 600; color: #333; border: none; cursor: pointer; background: white; border-radius: 1rem; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);';
+    googleBtn.innerHTML = `
+        <svg width="20" height="20" viewBox="0 0 48 48">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+        </svg>
+        <span>Sign up with Google</span>
+    `;
+    googleBtn.onclick = () => firebaseGoogleLogin();
+    form.appendChild(googleBtn);
+
+    // Divider
+    const divider = createElement('div', 'flex items-center gap-3');
+    divider.style.margin = '0.5rem 0';
+    divider.innerHTML = `
+        <div style="flex: 1; height: 1px; background: #3a3a3a;"></div>
+        <span style="color: #8899aa; font-size: 13px; font-weight: 500;">or register with email</span>
+        <div style="flex: 1; height: 1px; background: #3a3a3a;"></div>
+    `;
+    form.appendChild(divider);
+    
+    const nameInput = createInput('Full Name', 'text');
+    const emailInput = createInput('Email', 'email');
+    const passwordInput = createInput('Password', 'password');
+    const confirmPasswordInput = createInput('Confirm Password', 'password');
+    
+    const registerButton = createButton('CREATE ACCOUNT', () => {
+        const name = nameInput.value;
+        const email = emailInput.value;
+        const password = passwordInput.value;
+        const confirmPassword = confirmPasswordInput.value;
+        
+        if (!name || !email || !password || !confirmPassword) {
+            alert('Please fill in all fields');
+            return;
+        }
+        
+        if (password !== confirmPassword) {
+            alert('Passwords do not match');
+            return;
+        }
+        
+        // Firebase email/password registration
+        auth.createUserWithEmailAndPassword(email, password)
+            .then((result) => {
+                // Set display name
+                return result.user.updateProfile({ displayName: name }).then(() => {
+                    handleAuthSuccess(result.user);
+                });
+            })
+            .catch((error) => {
+                if (error.code === 'auth/email-already-in-use') {
+                    alert('This email is already registered. Try logging in instead.');
+                } else if (error.code === 'auth/weak-password') {
+                    alert('Password must be at least 6 characters.');
+                } else {
+                    alert('Registration failed: ' + error.message);
+                }
+            });
+    }, 'primary', true);
+    registerButton.style.height = '56px';
+    registerButton.style.fontSize = '16px';
+    
+    form.appendChild(nameInput);
+    form.appendChild(emailInput);
+    form.appendChild(passwordInput);
+    form.appendChild(confirmPasswordInput);
+    form.appendChild(registerButton);
+    
+    content.appendChild(form);
+    screen.appendChild(content);
+    container.appendChild(screen);
+    
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+
+    </script>
+    <script>
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    </script>
+</body>
+</html>
