@@ -79,9 +79,7 @@
             },
             lessonList: [],
             selectedLessonId: null,
-            selectedLessonTitle: null,
-            selectedCategory: null,
-            selectedDifficulty: null
+            selectedLessonTitle: null
         };
 
         // Local Storage Management
@@ -104,15 +102,6 @@
             const savedUserData = Storage.load('userData');
             if (savedUserData) {
                 AppState.userData = { ...AppState.userData, ...savedUserData };
-            }
-
-            const savedCategory = Storage.load('selectedCategory');
-            if (savedCategory) {
-                AppState.selectedCategory = savedCategory;
-            }
-            const savedDifficulty = Storage.load('selectedDifficulty');
-            if (savedDifficulty) {
-                AppState.selectedDifficulty = savedDifficulty;
             }
 
             // Apply mobile mode
@@ -833,21 +822,6 @@
             }
         }
 
-        function getFilteredLessons() {
-            if (!AppState.selectedCategory || !AppState.selectedDifficulty) {
-                return AppState.lessonList;
-            }
-
-            const selectedCategory = AppState.selectedCategory.trim().toLowerCase();
-            const selectedDifficulty = AppState.selectedDifficulty.trim().toLowerCase();
-
-            return AppState.lessonList.filter(lesson => {
-                const lessonCategory = String(lesson.category || '').trim().toLowerCase();
-                const lessonDifficulty = String(lesson.difficulty || '').trim().toLowerCase();
-                return lessonCategory === selectedCategory && lessonDifficulty === selectedDifficulty;
-            });
-        }
-
         async function renderDashboard() {
             await fetchLessonsFromFirestore();
 
@@ -875,25 +849,12 @@
             title.textContent = 'Available Lessons';
             content.appendChild(title);
 
-            const filteredLessons = getFilteredLessons();
-            const hasSelection = AppState.selectedCategory && AppState.selectedDifficulty;
-
             if (!AppState.lessonList.length) {
                 const emptyText = createElement('p', 'text-[#BEBEBE]');
                 emptyText.textContent = 'No lessons available yet.';
                 content.appendChild(emptyText);
-            } else if (hasSelection && !filteredLessons.length) {
-                const emptyText = createElement('p', 'text-[#BEBEBE]');
-                emptyText.textContent = 'No lessons match your selected category and difficulty.';
-                content.appendChild(emptyText);
             } else {
-                if (!hasSelection) {
-                    const noteText = createElement('p', 'text-[#BEBEBE] mb-4');
-                    noteText.textContent = 'Choose a category and difficulty level to see the lessons that match your plan.';
-                    content.appendChild(noteText);
-                }
-
-                (hasSelection ? filteredLessons : AppState.lessonList).forEach((lesson) => {
+                AppState.lessonList.forEach((lesson) => {
                     const lessonCard = createElement('div', 'card p-4 mb-4');
                     lessonCard.style.cursor = 'pointer';
 
@@ -1980,11 +1941,7 @@
         // Module List Screen
 
 
-        async function renderModules() {
-            if (!AppState.lessonList.length) {
-                await fetchLessonsFromFirestore();
-            }
-
+        function renderModules() {
             const container = document.getElementById('content-container');
             const isMobile = AppState.isMobile;
 
@@ -2000,70 +1957,83 @@
             header.appendChild(logo);
             screen.appendChild(header);
 
+            // Content
             const content = createElement('div', `flex-1 ${isMobile ? 'px-6 py-6' : 'px-12 py-8'}`);
 
-            const title = createElement('h2', 'text-white mb-6');
-            title.style.fontSize = isMobile ? '24px' : '32px';
-            title.textContent = 'Your Lessons';
-            content.appendChild(title);
+            const modules = [
+                { id: 1, title: 'Basics', icon: '\uD83C\uDF1F', lessons: 5, completed: 5, locked: false },
+                { id: 2, title: 'Family & Friends', icon: '\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67', lessons: 5, completed: 2, locked: false },
+                { id: 3, title: 'Food & Dining', icon: '\uD83C\uDF7D\uFE0F', lessons: 5, completed: 0, locked: true },
+                { id: 4, title: 'Numbers & Time', icon: '\u23F0', lessons: 5, completed: 0, locked: true },
+                { id: 5, title: 'Shopping', icon: '\uD83D\uDECD\uFE0F', lessons: 5, completed: 0, locked: true },
+                { id: 6, title: 'Travel', icon: '\u2708\uFE0F', lessons: 5, completed: 0, locked: true }
+            ];
 
-            const filteredLessons = getFilteredLessons();
-            const hasSelection = AppState.selectedCategory && AppState.selectedDifficulty;
+            const modulesGrid = createElement('div', `grid ${isMobile ? 'grid-1' : 'grid-2'} gap-4`);
 
-            if (!AppState.lessonList.length) {
-                const emptyText = createElement('p', 'text-[#BEBEBE]');
-                emptyText.textContent = 'Loading lessons...';
-                content.appendChild(emptyText);
-            } else if (!hasSelection) {
-                const noteText = createElement('p', 'text-[#BEBEBE] mb-4');
-                noteText.textContent = 'Choose a category and difficulty level to see the lessons that match your plan.';
-                content.appendChild(noteText);
-            } else if (!filteredLessons.length) {
-                const emptyText = createElement('p', 'text-[#BEBEBE]');
-                emptyText.textContent = 'No lessons match your selected category and difficulty.';
-                content.appendChild(emptyText);
-            } else {
-                const infoText = createElement('p', 'text-[#BEBEBE] mb-4');
-                infoText.textContent = `Showing ${AppState.selectedDifficulty} lessons for ${AppState.selectedCategory}.`;
-                content.appendChild(infoText);
+            modules.forEach(module => {
+                const card = createElement('div', `card p-6 transition-all ${module.locked ? 'opacity-50' : 'hover:scale-[1.02] cursor-pointer'}`);
 
-                const lessonsGrid = createElement('div', `grid ${isMobile ? 'grid-1' : 'grid-2'} gap-4`);
-                filteredLessons.forEach((lesson) => {
-                    const card = createElement('div', 'card p-6 transition-all hover:scale-[1.02] cursor-pointer');
-                    const topRow = createElement('div', 'flex items-start justify-between mb-4');
+                const topRow = createElement('div', 'flex items-start justify-between mb-4');
 
-                    const leftSide = createElement('div', '');
-                    const lessonTitle = createElement('h3', 'text-white mb-1');
-                    lessonTitle.style.fontSize = isMobile ? '18px' : '22px';
-                    lessonTitle.textContent = lesson.title || 'Untitled Lesson';
+                const leftSide = createElement('div', 'flex items-center gap-4');
+                const icon = createElement('div', 'text-5xl');
+                icon.textContent = module.icon;
 
-                    const lessonMeta = createElement('p', 'text-[#BEBEBE]');
-                    lessonMeta.style.fontSize = '14px';
-                    lessonMeta.textContent = `${lesson.category || 'Unknown Category'} • ${lesson.difficulty || 'N/A'}`;
+                const info = createElement('div', '');
+                const moduleTitle = createElement('h3', 'text-white mb-1');
+                moduleTitle.style.fontSize = isMobile ? '18px' : '22px';
+                moduleTitle.textContent = module.title;
 
-                    leftSide.appendChild(lessonTitle);
-                    leftSide.appendChild(lessonMeta);
+                const lessonsText = createElement('p', 'text-[#BEBEBE]');
+                lessonsText.style.fontSize = '14px';
+                lessonsText.textContent = `${module.lessons} lessons`;
 
-                    const status = createElement('div', '');
-                    status.innerHTML = `<i data-lucide="play-circle" style="width: 24px; height: 24px; color: #6BB6FF;"></i>`;
+                info.appendChild(moduleTitle);
+                info.appendChild(lessonsText);
+                leftSide.appendChild(icon);
+                leftSide.appendChild(info);
 
-                    topRow.appendChild(leftSide);
-                    topRow.appendChild(status);
-                    card.appendChild(topRow);
+                const status = createElement('div', '');
+                if (module.locked) {
+                    status.innerHTML = '<i data-lucide="lock" style="width: 24px; height: 24px; color: #666;"></i>';
+                } else {
+                    status.innerHTML = `<i data-lucide="check-circle" style="width: 24px; height: 24px; color: #10B981;"></i>`;
+                }
 
-                    card.onclick = () => {
-                        AppState.selectedLessonId = lesson.id;
-                        AppState.selectedLessonTitle = lesson.title;
-                        navigateTo('lesson-start');
-                    };
+                topRow.appendChild(leftSide);
+                topRow.appendChild(status);
 
-                    lessonsGrid.appendChild(card);
-                });
-                content.appendChild(lessonsGrid);
-            }
+                // Progress bar
+                if (!module.locked) {
+                    const progressContainer = createElement('div', 'mt-4');
+                    const progressBar = createElement('div', 'progress-bar');
+                    const progressFill = createElement('div', 'progress-bar-fill');
+                    progressFill.style.width = `${(module.completed / module.lessons) * 100}%`;
+                    progressBar.appendChild(progressFill);
 
+                    const progressText = createElement('p', 'text-[#BEBEBE] mt-2');
+                    progressText.style.fontSize = '12px';
+                    progressText.textContent = `${module.completed}/${module.lessons} completed`;
+
+                    progressContainer.appendChild(progressBar);
+                    progressContainer.appendChild(progressText);
+                    card.appendChild(progressContainer);
+                }
+
+                card.appendChild(topRow);
+
+                if (!module.locked) {
+                    card.onclick = () => navigateTo('lesson-start');
+                }
+
+                modulesGrid.appendChild(card);
+            });
+
+            content.appendChild(modulesGrid);
             screen.appendChild(content);
 
+            // Bottom spacer and nav
             const spacer = createElement('div', '');
             spacer.style.height = '80px';
             screen.appendChild(spacer);
@@ -2507,11 +2477,7 @@
             <span style="font-size: 32px;">${option.icon}</span>
             <span class="text-white" style="fontSize: ${isMobile ? '16px' : '18px'};">${option.text}</span>
         `;
-                btn.onclick = () => {
-                    AppState.selectedCategory = option.text;
-                    Storage.save('selectedCategory', option.text);
-                    navigateTo('question-2');
-                };
+                btn.onclick = () => navigateTo('question-2');
                 optionsContainer.appendChild(btn);
             });
 
@@ -2603,17 +2569,7 @@
             <span class="text-white" style="fontSize: ${isMobile ? '16px' : '18px'}; font-weight: 600;">${option.text}</span>
             <span class="text-[#BEBEBE]" style="fontSize: ${isMobile ? '13px' : '14px'};">${option.desc}</span>
         `;
-                btn.onclick = () => {
-                    const value = option.text;
-                    const difficulty = value === 'Complete Beginner' || value === 'Some Basics'
-                        ? 'Easy'
-                        : value === 'Intermediate'
-                            ? 'Intermediate'
-                            : 'Hard';
-                    AppState.selectedDifficulty = difficulty;
-                    Storage.save('selectedDifficulty', difficulty);
-                    navigateTo('motivation');
-                };
+                btn.onclick = () => navigateTo('motivation');
                 optionsContainer.appendChild(btn);
             });
 
