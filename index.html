@@ -695,6 +695,183 @@
             });
         }
 
+        function getLessonCreatedAtValue(createdAt) {
+            if (!createdAt) return null;
+            if (typeof createdAt === 'number') return createdAt;
+            if (createdAt instanceof Date) return createdAt.getTime();
+            if (typeof createdAt.toMillis === 'function') return createdAt.toMillis();
+            if (typeof createdAt.seconds === 'number') return createdAt.seconds * 1000;
+            return null;
+        }
+
+        function getLessonSortValue(lesson, fallbackIndex = 0) {
+            const explicitOrder = [
+                lesson.order,
+                lesson.sortOrder,
+                lesson.sequence,
+                lesson.position,
+                lesson.lessonNumber
+            ].find(value => Number.isFinite(Number(value)));
+
+            if (explicitOrder !== undefined) {
+                return Number(explicitOrder);
+            }
+
+            const createdAtValue = getLessonCreatedAtValue(lesson.createdAt);
+            if (createdAtValue !== null) {
+                return createdAtValue;
+            }
+
+            return fallbackIndex;
+        }
+
+        function sortLessonsForPath(lessons) {
+            return [...lessons]
+                .map((lesson, index) => ({ lesson, index }))
+                .sort((a, b) => getLessonSortValue(a.lesson, a.index) - getLessonSortValue(b.lesson, b.index))
+                .map(item => item.lesson);
+        }
+
+        function getPathwayMeta(pathway, index = 0) {
+            const normalized = normalizeCategory(pathway);
+            const pathwayThemes = {
+                'travel and culture': {
+                    icon: 'plane',
+                    color: '#2F7CF6',
+                    accent: '#69A8FF',
+                    description: 'Navigate trips, directions, and local culture with confidence.'
+                },
+                'family and friends': {
+                    icon: 'users',
+                    color: '#19C37D',
+                    accent: '#63E6BE',
+                    description: 'Talk naturally with relatives, friends, and people close to you.'
+                },
+                'work and business': {
+                    icon: 'briefcase-business',
+                    color: '#F59E0B',
+                    accent: '#FCD34D',
+                    description: 'Use Cebuano for meetings, clients, and workplace situations.'
+                },
+                'personal interest': {
+                    icon: 'sparkles',
+                    color: '#8B5CF6',
+                    accent: '#C4B5FD',
+                    description: 'Build fluency around hobbies, curiosity, and self-driven learning.'
+                }
+            };
+
+            return pathwayThemes[normalized] || {
+                icon: 'route',
+                color: ['#2F7CF6', '#19C37D', '#F59E0B', '#EC4899'][index % 4],
+                accent: '#E5E7EB',
+                description: 'Progress through the lessons in this pathway.'
+            };
+        }
+
+        function getGroupedLessonsByPathway(lessons) {
+            const preferredOrder = [
+                'travel and culture',
+                'family and friends',
+                'work and business',
+                'personal interest'
+            ];
+
+            const pathwayMap = new Map();
+
+            lessons.forEach((lesson) => {
+                const pathwayName = lesson.pathway || lesson.path || lesson.category || 'General Pathway';
+                const normalizedPathway = normalizeCategory(pathwayName) || 'general pathway';
+
+                if (!pathwayMap.has(normalizedPathway)) {
+                    pathwayMap.set(normalizedPathway, {
+                        pathway: pathwayName,
+                        normalizedPathway,
+                        lessons: []
+                    });
+                }
+
+                pathwayMap.get(normalizedPathway).lessons.push(lesson);
+            });
+
+            return [...pathwayMap.values()]
+                .sort((a, b) => {
+                    const aIndex = preferredOrder.indexOf(a.normalizedPathway);
+                    const bIndex = preferredOrder.indexOf(b.normalizedPathway);
+
+                    if (aIndex === -1 && bIndex === -1) {
+                        return a.pathway.localeCompare(b.pathway);
+                    }
+
+                    if (aIndex === -1) return 1;
+                    if (bIndex === -1) return -1;
+                    return aIndex - bIndex;
+                })
+                .map(group => ({
+                    ...group,
+                    lessons: sortLessonsForPath(group.lessons)
+                }));
+        }
+
+        function isLessonCompleted(lesson) {
+            const completedLessons = AppState.userData.completedLessons || [];
+            return completedLessons.includes(lesson.id) || completedLessons.includes(lesson.title);
+        }
+
+        function getLessonState(lesson, lessonIndex, lessonsInCategory) {
+            const explicitState = normalizeValue(lesson.status);
+            if (['completed', 'current', 'unlocked', 'locked'].includes(explicitState)) {
+                return explicitState;
+            }
+
+            const firstIncompleteIndex = lessonsInCategory.findIndex(item => !isLessonCompleted(item));
+
+            if (isLessonCompleted(lesson)) {
+                return 'completed';
+            }
+
+            if (firstIncompleteIndex === -1 || lessonIndex === firstIncompleteIndex) {
+                return 'current';
+            }
+
+            return 'unlocked';
+        }
+
+        function getLessonStarCount(lesson) {
+            if (Number.isFinite(Number(lesson.stars))) {
+                return Math.max(0, Math.min(3, Number(lesson.stars)));
+            }
+
+            const difficulty = normalizeDifficulty(lesson.difficulty);
+            if (difficulty === 'hard') return 3;
+            if (difficulty === 'intermediate') return 2;
+            return 1;
+        }
+
+        function getLessonXpValue(lesson) {
+            if (Number.isFinite(Number(lesson.xp))) {
+                return Number(lesson.xp);
+            }
+
+            const difficulty = normalizeDifficulty(lesson.difficulty);
+            if (difficulty === 'hard') return 200;
+            if (difficulty === 'intermediate') return 150;
+            return 100;
+        }
+
+        function getLessonButtonIcon(lesson, state) {
+            const lessonType = normalizeValue(lesson.type);
+
+            if (state === 'completed') return 'check';
+            if (state === 'locked') return 'lock';
+            if (lessonType === 'practice') return 'dumbbell';
+            if (lessonType === 'review') return 'refresh-cw';
+            if (lessonType === 'story') return 'book-open';
+            if (lessonType === 'boss') return 'crown';
+            if (state === 'current') return 'play';
+            return 'book-open';
+        }
+
 
 
         // Admin Dashboard Screen
@@ -925,6 +1102,7 @@
             const container = document.getElementById('content-container');
             const isMobile = AppState.isMobile;
             const filteredLessons = getFilteredLessons();
+            const groupedLessons = getGroupedLessonsByPathway(filteredLessons);
 
             const screen = createElement('div', 'h-full overflow-y-auto relative');
             screen.style.backgroundColor = '#1C1C1C';
@@ -942,47 +1120,161 @@
 
             const content = createElement('div', 'max-w-2xl mx-auto px-6 py-8');
 
-            const title = createElement('h2', 'text-white mb-6');
+            const title = createElement('h2', 'text-white mb-2');
             title.style.fontSize = isMobile ? '24px' : '32px';
-            title.textContent = 'Available Lessons';
+            title.textContent = 'Your Learning Path';
             content.appendChild(title);
+
+            const subtitle = createElement('p', 'text-[#BEBEBE] mb-8');
+            subtitle.style.fontSize = isMobile ? '14px' : '16px';
+            subtitle.textContent = 'Lessons are organized by pathway so the learning path feels clearer and easier to follow.';
+            content.appendChild(subtitle);
 
             if (!AppState.lessonList.length) {
                 const emptyText = createElement('p', 'text-[#BEBEBE]');
                 emptyText.textContent = 'No lessons available yet.';
                 content.appendChild(emptyText);
-            } else if (!filteredLessons.length) {
+            } else if (!groupedLessons.length) {
+                const emptyState = createElement('div', 'card p-6');
+                emptyState.style.cssText = 'background: linear-gradient(180deg, #262626 0%, #202020 100%); border: 1px solid #2E2E2E; border-radius: 1.5rem;';
+
+                const emptyTitle = createElement('p', 'text-white mb-2');
+                emptyTitle.style.fontSize = '18px';
+                emptyTitle.style.fontWeight = '700';
+                emptyTitle.textContent = 'No lessons found';
+
                 const emptyText = createElement('p', 'text-[#BEBEBE]');
-                emptyText.textContent = 'No lessons match your selected category and proficiency yet.';
-                content.appendChild(emptyText);
+                emptyText.style.fontSize = '14px';
+                emptyText.textContent = 'There are no lessons yet for the current user selection.';
+
+                emptyState.appendChild(emptyTitle);
+                emptyState.appendChild(emptyText);
+                content.appendChild(emptyState);
             } else {
-                filteredLessons.forEach((lesson) => {
-                    const lessonCard = createElement('div', 'card p-4 mb-4');
-                    lessonCard.style.cursor = 'pointer';
+                groupedLessons.forEach((group, groupIndex) => {
+                    const categoryMeta = getPathwayMeta(group.pathway, groupIndex);
+                    const categorySection = createElement('section', 'mb-12');
 
-                    const lessonTitle = createElement('h3', 'text-white mb-2');
-                    lessonTitle.style.fontSize = isMobile ? '18px' : '22px';
-                    lessonTitle.textContent = lesson.title || 'Untitled Lesson';
+                    const categoryHeader = createElement('div', 'mb-8');
+                    categoryHeader.style.cssText = 'background: linear-gradient(180deg, #2B2B2B 0%, #252525 100%); border: 1px solid #343434; border-radius: 1.75rem; padding: 1.25rem 1.35rem; box-shadow: 0 18px 40px rgba(0,0,0,0.18);';
 
-                    const lessonDifficulty = createElement('p', 'text-[#BEBEBE]');
-                    lessonDifficulty.style.fontSize = '14px';
-                    lessonDifficulty.textContent = `Difficulty: ${lesson.difficulty || 'N/A'}`;
+                    const headerRow = createElement('div', 'flex items-center justify-between gap-4');
+                    const headerInfo = createElement('div', 'flex-1');
 
-                    const lessonCategory = createElement('p', 'text-[#BEBEBE]');
-                    lessonCategory.style.fontSize = '14px';
-                    lessonCategory.textContent = `Category: ${lesson.category || 'N/A'}`;
+                    const categoryTitleRow = createElement('div', 'flex items-center gap-3 mb-2');
+                    const categoryIcon = createElement('div', 'flex items-center justify-center rounded-xl');
+                    categoryIcon.style.cssText = `width: ${isMobile ? '42px' : '48px'}; height: ${isMobile ? '42px' : '48px'}; background: linear-gradient(135deg, ${categoryMeta.color} 0%, ${categoryMeta.accent} 100%); box-shadow: 0 10px 24px ${categoryMeta.color}30;`;
+                    categoryIcon.innerHTML = `<i data-lucide="${categoryMeta.icon}" style="width: 20px; height: 20px; color: white;"></i>`;
 
-                    lessonCard.appendChild(lessonTitle);
-                    lessonCard.appendChild(lessonDifficulty);
-                    lessonCard.appendChild(lessonCategory);
+                    const categoryTitle = createElement('h3', 'text-white');
+                    categoryTitle.style.cssText = `font-size: ${isMobile ? '26px' : '30px'}; font-weight: 700; letter-spacing: -0.02em;`;
+                    categoryTitle.textContent = group.pathway;
 
-                    lessonCard.onclick = () => {
-                        AppState.selectedLessonId = lesson.id;
-                        AppState.selectedLessonTitle = lesson.title;
-                        navigateTo('lesson-start');
-                    };
+                    categoryTitleRow.appendChild(categoryIcon);
+                    categoryTitleRow.appendChild(categoryTitle);
 
-                    content.appendChild(lessonCard);
+                    const categoryDescription = createElement('p', 'text-[#C8C8C8]');
+                    categoryDescription.style.fontSize = isMobile ? '14px' : '16px';
+                    categoryDescription.textContent = categoryMeta.description;
+
+                    headerInfo.appendChild(categoryTitleRow);
+                    headerInfo.appendChild(categoryDescription);
+
+                    const unitBadge = createElement('div', 'flex items-center justify-center');
+                    unitBadge.style.cssText = `min-width: ${isMobile ? '58px' : '68px'}; height: ${isMobile ? '58px' : '68px'}; padding: 0 1rem; border-radius: 1.25rem; background: linear-gradient(180deg, ${categoryMeta.color} 0%, ${categoryMeta.accent} 100%); box-shadow: 0 14px 28px ${categoryMeta.color}33;`;
+                    unitBadge.innerHTML = `<span style="font-size: ${isMobile ? '26px' : '30px'}; font-weight: 700; color: white;">${groupIndex + 1}</span>`;
+
+                    headerRow.appendChild(headerInfo);
+                    headerRow.appendChild(unitBadge);
+                    categoryHeader.appendChild(headerRow);
+                    categorySection.appendChild(categoryHeader);
+
+                    const pathContainer = createElement('div', 'relative');
+                    pathContainer.style.padding = isMobile ? '0.5rem 0 0.25rem' : '1rem 0 0.5rem';
+
+                    const centerLine = createElement('div', '');
+                    centerLine.style.cssText = 'position: absolute; top: 0; bottom: 0; left: 50%; width: 4px; transform: translateX(-50%); background: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.14) 10%, rgba(255,255,255,0.14) 90%, rgba(255,255,255,0.04) 100%); border-radius: 999px;';
+                    pathContainer.appendChild(centerLine);
+
+                    group.lessons.forEach((lesson, lessonIndex) => {
+                        const lessonState = getLessonState(lesson, lessonIndex, group.lessons);
+                        const isLeft = lessonIndex % 2 === 0;
+                        const starCount = getLessonStarCount(lesson);
+                        const xpValue = getLessonXpValue(lesson);
+                        const buttonIcon = getLessonButtonIcon(lesson, lessonState);
+
+                        let lessonColor = '#3B82F6';
+                        let titleColor = '#FFFFFF';
+                        let textColor = '#D1D5DB';
+                        let lessonGlow = 'rgba(59,130,246,0.25)';
+
+                        if (lessonState === 'completed') {
+                            lessonColor = '#19C37D';
+                            lessonGlow = 'rgba(25,195,125,0.28)';
+                        } else if (lessonState === 'locked') {
+                            lessonColor = '#3A3A3A';
+                            lessonGlow = 'rgba(0,0,0,0)';
+                            titleColor = '#7A7A7A';
+                            textColor = '#6A6A6A';
+                        } else if (lessonState === 'unlocked') {
+                            lessonColor = categoryMeta.color;
+                            lessonGlow = `${categoryMeta.color}33`;
+                        }
+
+                        const lessonRow = createElement('div', `relative flex ${isLeft ? 'justify-start' : 'justify-end'}`);
+                        lessonRow.style.minHeight = isMobile ? '190px' : '220px';
+                        lessonRow.style.marginBottom = isMobile ? '1.5rem' : '2rem';
+
+                        const lessonCard = createElement('div', 'relative flex flex-col items-center text-center');
+                        lessonCard.style.width = isMobile ? '160px' : '220px';
+
+                        const lessonButton = createElement('button', '');
+                        lessonButton.style.cssText = `width: ${isMobile ? '92px' : '112px'}; height: ${isMobile ? '92px' : '112px'}; border-radius: 999px; border: none; cursor: ${lessonState === 'locked' ? 'default' : 'pointer'}; background: linear-gradient(180deg, ${lessonColor} 0%, ${lessonState === 'locked' ? '#303030' : lessonColor} 100%); box-shadow: 0 18px 32px ${lessonGlow}; display: flex; align-items: center; justify-content: center; position: relative; z-index: 2; transition: transform 0.2s ease, box-shadow 0.2s ease; opacity: ${lessonState === 'locked' ? '0.7' : '1'};`;
+                        lessonButton.innerHTML = `<i data-lucide="${buttonIcon}" style="width: ${isMobile ? '42px' : '48px'}; height: ${isMobile ? '42px' : '48px'}; color: white;"></i>`;
+
+                        if (lessonState !== 'locked') {
+                            lessonButton.onclick = () => {
+                                AppState.selectedLessonId = lesson.id;
+                                AppState.selectedLessonTitle = lesson.title;
+                                navigateTo('lesson-start');
+                            };
+                        }
+
+                        const lessonInfo = createElement('div', 'mt-4');
+
+                        const lessonTitle = createElement('p', '');
+                        lessonTitle.style.cssText = `font-size: ${isMobile ? '15px' : '18px'}; font-weight: 600; color: ${titleColor}; line-height: 1.3;`;
+                        lessonTitle.textContent = lesson.title || 'Untitled Lesson';
+
+                        const starsContainer = createElement('div', 'flex items-center justify-center gap-1 mt-2');
+                        for (let i = 0; i < 3; i++) {
+                            const star = createElement('span', '');
+                            const isFilled = i < starCount;
+                            star.innerHTML = `<i data-lucide="star" style="width: ${isMobile ? '14px' : '16px'}; height: ${isMobile ? '14px' : '16px'}; color: ${isFilled ? '#FACC15' : '#555'}; fill: ${isFilled ? '#FACC15' : 'none'};"></i>`;
+                            starsContainer.appendChild(star);
+                        }
+
+                        const xpBadge = createElement('div', 'mt-3');
+                        xpBadge.style.cssText = 'display: inline-flex; align-items: center; justify-content: center; padding: 0.55rem 0.85rem; border-radius: 999px; background: #2A2A2A; border: 1px solid #343434;';
+                        xpBadge.innerHTML = `<span style="font-size: ${isMobile ? '12px' : '13px'}; font-weight: 600; color: ${lessonState === 'locked' ? textColor : '#69A8FF'};">+${xpValue} XP</span>`;
+
+                        const difficultyText = createElement('p', '');
+                        difficultyText.style.cssText = `margin-top: 0.65rem; font-size: ${isMobile ? '12px' : '13px'}; color: ${textColor}; letter-spacing: 0.02em;`;
+                        difficultyText.textContent = lesson.difficulty ? lesson.difficulty : 'Lesson';
+
+                        lessonInfo.appendChild(lessonTitle);
+                        lessonInfo.appendChild(starsContainer);
+                        lessonInfo.appendChild(xpBadge);
+                        lessonInfo.appendChild(difficultyText);
+
+                        lessonCard.appendChild(lessonButton);
+                        lessonCard.appendChild(lessonInfo);
+                        lessonRow.appendChild(lessonCard);
+                        pathContainer.appendChild(lessonRow);
+                    });
+
+                    categorySection.appendChild(pathContainer);
+                    content.appendChild(categorySection);
                 });
             }
 
