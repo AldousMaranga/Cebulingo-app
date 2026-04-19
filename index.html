@@ -925,9 +925,6 @@
             const container = document.getElementById('content-container');
             const isMobile = AppState.isMobile;
             const filteredLessons = getFilteredLessons();
-            const selectedCategory = AppState.learningPreferences.category;
-            const selectedProficiency = AppState.learningPreferences.proficiency;
-            const selectedDifficulty = getDifficultyForProficiency(selectedProficiency);
 
             const screen = createElement('div', 'h-full overflow-y-auto relative');
             screen.style.backgroundColor = '#1C1C1C';
@@ -949,25 +946,6 @@
             title.style.fontSize = isMobile ? '24px' : '32px';
             title.textContent = 'Available Lessons';
             content.appendChild(title);
-
-            if (selectedCategory || selectedProficiency) {
-                const filterSummary = createElement('div', 'card p-4 mb-6');
-                filterSummary.style.background = 'linear-gradient(135deg, rgba(26,115,232,0.16) 0%, rgba(77,172,255,0.08) 100%)';
-                filterSummary.style.border = '1px solid rgba(107,182,255,0.22)';
-
-                const summaryTitle = createElement('p', 'text-white mb-2');
-                summaryTitle.style.fontSize = '14px';
-                summaryTitle.style.fontWeight = '600';
-                summaryTitle.textContent = 'Showing lessons based on your setup';
-
-                const summaryDetails = createElement('p', 'text-[#BEBEBE]');
-                summaryDetails.style.fontSize = '14px';
-                summaryDetails.textContent = `Category: ${selectedCategory || 'Any'} • Difficulty: ${selectedDifficulty ? capitalize(selectedDifficulty) : 'Any'}${selectedProficiency ? ` (${selectedProficiency})` : ''}`;
-
-                filterSummary.appendChild(summaryTitle);
-                filterSummary.appendChild(summaryDetails);
-                content.appendChild(filterSummary);
-            }
 
             if (!AppState.lessonList.length) {
                 const emptyText = createElement('p', 'text-[#BEBEBE]');
