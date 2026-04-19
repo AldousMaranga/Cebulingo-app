@@ -79,7 +79,11 @@
             },
             lessonList: [],
             selectedLessonId: null,
-            selectedLessonTitle: null
+            selectedLessonTitle: null,
+            learningPreferences: {
+                category: null,
+                proficiency: null
+            }
         };
 
         // Local Storage Management
@@ -102,6 +106,14 @@
             const savedUserData = Storage.load('userData');
             if (savedUserData) {
                 AppState.userData = { ...AppState.userData, ...savedUserData };
+            }
+
+            const savedLearningPreferences = Storage.load('learningPreferences');
+            if (savedLearningPreferences) {
+                AppState.learningPreferences = {
+                    ...AppState.learningPreferences,
+                    ...savedLearningPreferences
+                };
             }
 
             // Apply mobile mode
@@ -598,6 +610,91 @@
             return input;
         }
 
+        function normalizeValue(value) {
+            return (value || '')
+                .toString()
+                .trim()
+                .toLowerCase()
+                .replace(/\s*&\s*/g, ' and ')
+                .replace(/[^a-z0-9]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        function normalizeCategory(value) {
+            const normalized = normalizeValue(value);
+
+            const categoryMap = {
+                'travel and culture': 'travel and culture',
+                'travel culture': 'travel and culture',
+                'family and friends': 'family and friends',
+                'family friends': 'family and friends',
+                'work and business': 'work and business',
+                'work business': 'work and business',
+                'personal interest': 'personal interest',
+                'personal interests': 'personal interest'
+            };
+
+            return categoryMap[normalized] || normalized;
+        }
+
+        function normalizeDifficulty(value) {
+            const normalized = normalizeValue(value);
+
+            const difficultyMap = {
+                'easy': 'easy',
+                'beginner': 'easy',
+                'basic': 'easy',
+                'complete beginner': 'easy',
+                'some basics': 'easy',
+                'intermediate': 'intermediate',
+                'medium': 'intermediate',
+                'advanced': 'hard',
+                'hard': 'hard',
+                'difficult': 'hard'
+            };
+
+            return difficultyMap[normalized] || normalized;
+        }
+
+        function getDifficultyForProficiency(proficiency) {
+            const normalized = normalizeValue(proficiency);
+
+            if (normalized === 'complete beginner' || normalized === 'some basics') {
+                return 'easy';
+            }
+
+            if (normalized === 'intermediate') {
+                return 'intermediate';
+            }
+
+            if (normalized === 'advanced') {
+                return 'hard';
+            }
+
+            return null;
+        }
+
+        function setLearningPreference(key, value) {
+            AppState.learningPreferences[key] = value;
+            Storage.save('learningPreferences', AppState.learningPreferences);
+        }
+
+        function getFilteredLessons() {
+            const selectedCategory = normalizeCategory(AppState.learningPreferences.category);
+            const selectedDifficulty = getDifficultyForProficiency(AppState.learningPreferences.proficiency);
+
+            return AppState.lessonList.filter((lesson) => {
+                const lessonCategory = normalizeCategory(lesson.category);
+                const lessonDifficulty = normalizeDifficulty(lesson.difficulty);
+
+                const matchesCategory = selectedCategory ? lessonCategory === selectedCategory : true;
+                const matchesDifficulty = selectedDifficulty ? lessonDifficulty === selectedDifficulty : true;
+
+                return matchesCategory && matchesDifficulty;
+            });
+        }
+
 
 
         // Admin Dashboard Screen
@@ -827,6 +924,10 @@
 
             const container = document.getElementById('content-container');
             const isMobile = AppState.isMobile;
+            const filteredLessons = getFilteredLessons();
+            const selectedCategory = AppState.learningPreferences.category;
+            const selectedProficiency = AppState.learningPreferences.proficiency;
+            const selectedDifficulty = getDifficultyForProficiency(selectedProficiency);
 
             const screen = createElement('div', 'h-full overflow-y-auto relative');
             screen.style.backgroundColor = '#1C1C1C';
@@ -849,12 +950,35 @@
             title.textContent = 'Available Lessons';
             content.appendChild(title);
 
+            if (selectedCategory || selectedProficiency) {
+                const filterSummary = createElement('div', 'card p-4 mb-6');
+                filterSummary.style.background = 'linear-gradient(135deg, rgba(26,115,232,0.16) 0%, rgba(77,172,255,0.08) 100%)';
+                filterSummary.style.border = '1px solid rgba(107,182,255,0.22)';
+
+                const summaryTitle = createElement('p', 'text-white mb-2');
+                summaryTitle.style.fontSize = '14px';
+                summaryTitle.style.fontWeight = '600';
+                summaryTitle.textContent = 'Showing lessons based on your setup';
+
+                const summaryDetails = createElement('p', 'text-[#BEBEBE]');
+                summaryDetails.style.fontSize = '14px';
+                summaryDetails.textContent = `Category: ${selectedCategory || 'Any'} • Difficulty: ${selectedDifficulty ? capitalize(selectedDifficulty) : 'Any'}${selectedProficiency ? ` (${selectedProficiency})` : ''}`;
+
+                filterSummary.appendChild(summaryTitle);
+                filterSummary.appendChild(summaryDetails);
+                content.appendChild(filterSummary);
+            }
+
             if (!AppState.lessonList.length) {
                 const emptyText = createElement('p', 'text-[#BEBEBE]');
                 emptyText.textContent = 'No lessons available yet.';
                 content.appendChild(emptyText);
+            } else if (!filteredLessons.length) {
+                const emptyText = createElement('p', 'text-[#BEBEBE]');
+                emptyText.textContent = 'No lessons match your selected category and proficiency yet.';
+                content.appendChild(emptyText);
             } else {
-                AppState.lessonList.forEach((lesson) => {
+                filteredLessons.forEach((lesson) => {
                     const lessonCard = createElement('div', 'card p-4 mb-4');
                     lessonCard.style.cursor = 'pointer';
 
@@ -866,8 +990,13 @@
                     lessonDifficulty.style.fontSize = '14px';
                     lessonDifficulty.textContent = `Difficulty: ${lesson.difficulty || 'N/A'}`;
 
+                    const lessonCategory = createElement('p', 'text-[#BEBEBE]');
+                    lessonCategory.style.fontSize = '14px';
+                    lessonCategory.textContent = `Category: ${lesson.category || 'N/A'}`;
+
                     lessonCard.appendChild(lessonTitle);
                     lessonCard.appendChild(lessonDifficulty);
+                    lessonCard.appendChild(lessonCategory);
 
                     lessonCard.onclick = () => {
                         AppState.selectedLessonId = lesson.id;
@@ -2477,7 +2606,10 @@
             <span style="font-size: 32px;">${option.icon}</span>
             <span class="text-white" style="fontSize: ${isMobile ? '16px' : '18px'};">${option.text}</span>
         `;
-                btn.onclick = () => navigateTo('question-2');
+                btn.onclick = () => {
+                    setLearningPreference('category', option.text);
+                    navigateTo('question-2');
+                };
                 optionsContainer.appendChild(btn);
             });
 
@@ -2569,7 +2701,10 @@
             <span class="text-white" style="fontSize: ${isMobile ? '16px' : '18px'}; font-weight: 600;">${option.text}</span>
             <span class="text-[#BEBEBE]" style="fontSize: ${isMobile ? '13px' : '14px'};">${option.desc}</span>
         `;
-                btn.onclick = () => navigateTo('motivation');
+                btn.onclick = () => {
+                    setLearningPreference('proficiency', option.text);
+                    navigateTo('motivation');
+                };
                 optionsContainer.appendChild(btn);
             });
 
