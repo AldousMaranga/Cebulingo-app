@@ -16,17 +16,7 @@
 
 
     <script>
-        const primaryConfig = {
-            apiKey: "AIzaSyBTTlt-ikZafNb2kB734_XAKZiVZPukCGI",
-            authDomain: "cebu-lingo.firebaseapp.com",
-            projectId: "cebu-lingo",
-            storageBucket: "cebu-lingo.firebasestorage.app",
-            messagingSenderId: "612302988002",
-            appId: "1:612302988002:web:05654c34d286a34d5e74bb",
-            measurementId: "G-15GWYKRB05"
-        };
-
-        const contentConfig = {
+        const firebaseConfig = {
             apiKey: "AIzaSyBe3Kc_kUL7Iof8isz1N0cAaLWKqwEuZ38",
             authDomain: "cebulingo-admin.firebaseapp.com",
             projectId: "cebulingo-admin",
@@ -35,16 +25,16 @@
             appId: "1:273042664545:web:48a3a2981bdd3bc0320e20"
         };
 
-        firebase.initializeApp(primaryConfig);
-        firebase.initializeApp(contentConfig, "contentApp");
+        firebase.initializeApp(firebaseConfig);
 
-        const auth = firebase.auth();
-        const db = firebase.firestore();
-
-        const contentApp = firebase.app("contentApp");
-        const contentDb = contentApp.firestore();
+        const app = firebase.app();
+        const auth = app.auth();
+        const db = app.firestore();
+        const contentDb = db;
 
         const googleProvider = new firebase.auth.GoogleAuthProvider();
+        const USER_PROFILE_COLLECTION = 'users';
+        const USER_ACCOUNT_COLLECTION = 'user_accounts';
 
     </script>
 
@@ -128,31 +118,22 @@
                 if (firstCheck) {
                     firstCheck = false;
                     if (user) {
-                        // User is logged in — sync data and go to dashboard
-                        AppState.userData.name = user.displayName || AppState.userData.name;
-                        AppState.userData.email = user.email || '';
-                        AppState.userData.photoURL = user.photoURL || '';
-                        AppState.userData.uid = user.uid;
-                        Storage.save('userData', AppState.userData);
-
-                        // Fetch extra data from Firestore
-                        db.collection('users').doc(user.uid).get()
-                            .then((doc) => {
-                                if (doc.exists) {
-                                    const data = doc.data();
-                                    AppState.userData.streak = data.streak || AppState.userData.streak;
-                                    AppState.userData.totalXP = data.totalXP || AppState.userData.totalXP;
-                                    AppState.userData.currentLevel = data.currentLevel || AppState.userData.currentLevel;
-                                    AppState.userData.completedLessons = data.completedLessons || AppState.userData.completedLessons;
-                                    Storage.save('userData', AppState.userData);
-                                }
-                                navigateTo('dashboard');
-                            })
+                        hydrateAuthenticatedUser(user)
+                            .then(() => navigateTo('dashboard'))
                             .catch(() => navigateTo('dashboard'));
                     } else {
-                        // No user — show login flow
-                        navigateTo('main-menu');
+                        // No user — require auth first
+                        navigateTo('login');
                     }
+                    return;
+                }
+
+                if (!user && requiresAuth(AppState.currentScreen)) {
+                    AppState.userData = { name: 'Language Learner', streak: 0, totalXP: 0, currentLevel: 1, completedLessons: [] };
+                    AppState.selectedLessonId = null;
+                    AppState.selectedLessonTitle = null;
+                    Storage.clear('userData');
+                    navigateTo('login');
                 }
             });
         }
@@ -201,7 +182,22 @@
                 { id: 'dashboard', icon: 'layout-dashboard', label: 'Dashboard', action: () => navigateTo('dashboard') },
                 { id: 'leaderboard', icon: 'trophy', label: 'Ranks', action: () => navigateTo('leaderboard') },
                 { id: 'modules', icon: 'book-open', label: 'Modules', action: () => navigateTo('modules') },
-                { id: 'profile', icon: 'user', label: 'Profile', action: () => navigateTo('profile') }
+                { id: 'profile', icon: 'user', label: 'Profile', action: () => navigateTo('profile') },
+                {
+                    id: 'logout',
+                    icon: 'log-out',
+                    label: 'Logout',
+                    action: () => {
+                        auth.signOut().then(() => {
+                            AppState.userData = { name: 'Language Learner', streak: 0, totalXP: 0, currentLevel: 1, completedLessons: [] };
+                            AppState.selectedLessonId = null;
+                            AppState.selectedLessonTitle = null;
+                            Storage.clear('userData');
+                            navigateTo('login');
+                        });
+                    },
+                    isDanger: true
+                }
             ];
 
             navItems.forEach(item => {
@@ -209,8 +205,8 @@
                 const navBtn = createElement('button', 'flex flex-col items-center gap-1');
                 navBtn.style.cssText = `border: none; cursor: pointer; padding: 0.45rem 0.85rem; border-radius: 0.75rem; background: ${isActive ? 'linear-gradient(135deg, #1A73E8 0%, #4DACFF 100%)' : 'transparent'}; transition: all 0.2s ease;`;
                 navBtn.innerHTML = `
-            <i data-lucide="${item.icon}" style="width: 20px; height: 20px; color: ${isActive ? 'white' : '#8899aa'};"></i>
-            <span style="font-size: 10px; color: ${isActive ? 'white' : '#8899aa'}; font-weight: 500;">${item.label}</span>
+            <i data-lucide="${item.icon}" style="width: 20px; height: 20px; color: ${item.isDanger ? '#EF4444' : isActive ? 'white' : '#8899aa'};"></i>
+            <span style="font-size: 10px; color: ${item.isDanger ? '#EF4444' : isActive ? 'white' : '#8899aa'}; font-weight: 500;">${item.label}</span>
         `;
                 navBtn.onclick = (e) => {
                     if (isActive) return;
@@ -282,6 +278,10 @@
         // Navigation System for CebuLingo
 
         function navigateTo(screen) {
+            if (requiresAuth(screen) && !auth.currentUser) {
+                screen = 'login';
+            }
+
             // Add current screen to history
             if (AppState.currentScreen && AppState.currentScreen !== screen) {
                 AppState.screenHistory.push(AppState.currentScreen);
@@ -292,6 +292,18 @@
 
             // Render the screen
             renderScreen(screen);
+        }
+
+        function requiresAuth(screen) {
+            const publicScreens = new Set([
+                'main-menu',
+                'login',
+                'register',
+                'admin-login',
+                'admin-dashboard'
+            ]);
+
+            return !publicScreens.has(screen);
         }
 
         function navigateBack() {
@@ -680,6 +692,14 @@
             Storage.save('learningPreferences', AppState.learningPreferences);
         }
 
+        function resetLearningPreferences() {
+            AppState.learningPreferences = {
+                category: null,
+                proficiency: null
+            };
+            Storage.save('learningPreferences', AppState.learningPreferences);
+        }
+
         function getFilteredLessons() {
             const selectedCategory = normalizeCategory(AppState.learningPreferences.category);
             const selectedDifficulty = getDifficultyForProficiency(AppState.learningPreferences.proficiency);
@@ -870,6 +890,96 @@
             if (lessonType === 'boss') return 'crown';
             if (state === 'current') return 'play';
             return 'book-open';
+        }
+
+        function getAuthProvider(user) {
+            if (!user || !user.providerData || !user.providerData.length) {
+                return 'password';
+            }
+
+            const providerIds = user.providerData
+                .map(provider => provider.providerId)
+                .filter(Boolean);
+
+            if (providerIds.includes('google.com')) {
+                return 'google';
+            }
+
+            if (providerIds.includes('password')) {
+                return 'password';
+            }
+
+            return providerIds[0] || 'password';
+        }
+
+        async function syncUserDocuments(user, options = {}) {
+            const accountRef = db.collection(USER_ACCOUNT_COLLECTION).doc(user.uid);
+            const profileRef = db.collection(USER_PROFILE_COLLECTION).doc(user.uid);
+
+            const [accountSnapshot, profileSnapshot] = await Promise.all([
+                accountRef.get(),
+                profileRef.get()
+            ]);
+
+            const accountPayload = {
+                uid: user.uid,
+                email: user.email || '',
+                displayName: user.displayName || 'Language Learner',
+                photoURL: user.photoURL || '',
+                provider: getAuthProvider(user),
+                isActive: true,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            if (!accountSnapshot.exists) {
+                accountPayload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+            }
+
+            const existingProfile = profileSnapshot.exists ? profileSnapshot.data() : {};
+            const profilePayload = {
+                name: user.displayName || existingProfile.name || AppState.userData.name || 'Language Learner',
+                email: user.email || existingProfile.email || '',
+                photoURL: user.photoURL || existingProfile.photoURL || '',
+                streak: existingProfile.streak ?? AppState.userData.streak ?? 0,
+                totalXP: existingProfile.totalXP ?? AppState.userData.totalXP ?? 0,
+                currentLevel: existingProfile.currentLevel ?? AppState.userData.currentLevel ?? 1,
+                completedLessons: existingProfile.completedLessons ?? AppState.userData.completedLessons ?? [],
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            if (!profileSnapshot.exists) {
+                profilePayload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+            }
+
+            await Promise.all([
+                accountRef.set(accountPayload, { merge: true }),
+                profileRef.set(profilePayload, { merge: true })
+            ]);
+        }
+
+        async function hydrateAuthenticatedUser(user) {
+            AppState.userData.name = user.displayName || AppState.userData.name;
+            AppState.userData.email = user.email || '';
+            AppState.userData.photoURL = user.photoURL || '';
+            AppState.userData.uid = user.uid;
+
+            await syncUserDocuments(user);
+
+            const profileDoc = await db.collection(USER_PROFILE_COLLECTION).doc(user.uid).get();
+            if (profileDoc.exists) {
+                const data = profileDoc.data();
+                AppState.userData.name = data.name || AppState.userData.name;
+                AppState.userData.email = data.email || AppState.userData.email;
+                AppState.userData.photoURL = data.photoURL || AppState.userData.photoURL;
+                AppState.userData.streak = data.streak ?? AppState.userData.streak;
+                AppState.userData.totalXP = data.totalXP ?? AppState.userData.totalXP;
+                AppState.userData.currentLevel = data.currentLevel ?? AppState.userData.currentLevel;
+                AppState.userData.completedLessons = data.completedLessons || AppState.userData.completedLessons;
+            }
+
+            Storage.save('userData', AppState.userData);
         }
 
 
@@ -1725,7 +1835,7 @@
             // Sync with Firestore if logged in
             const user = auth.currentUser;
             if (user) {
-                db.collection('users').doc(user.uid).update({
+                db.collection(USER_PROFILE_COLLECTION).doc(user.uid).update({
                     totalXP: AppState.userData.totalXP,
                     lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
                 }).catch(err => console.error("Firestore sync failed:", err));
@@ -2126,7 +2236,7 @@
         </svg>
         <span>Login with Google</span>
     `;
-            googleBtn.onclick = () => firebaseGoogleLogin();
+            googleBtn.onclick = () => firebaseGoogleLogin('dashboard');
             form.appendChild(googleBtn);
 
             // Divider
@@ -2154,7 +2264,7 @@
 
                 // Firebase email/password login
                 auth.signInWithEmailAndPassword(email, password)
-                    .then((result) => handleAuthSuccess(result.user))
+                    .then((result) => handleAuthSuccess(result.user, { redirectTo: 'dashboard' }))
                     .catch((error) => {
                         if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
                             alert('Invalid email or password. Please try again.');
@@ -2189,10 +2299,10 @@
         }
 
         // Firebase Google Sign-In
-        function firebaseGoogleLogin() {
+        function firebaseGoogleLogin(redirectTo = 'dashboard', resetPreferences = false) {
             auth.signInWithPopup(googleProvider)
                 .then((result) => {
-                    handleAuthSuccess(result.user);
+                    handleAuthSuccess(result.user, { redirectTo, resetPreferences });
                 })
                 .catch((error) => {
                     if (error.code === 'auth/popup-closed-by-user') {
@@ -2205,26 +2315,15 @@
         }
 
         // Handle successful auth — save to Firestore + navigate
-        function handleAuthSuccess(user) {
-            AppState.userData.name = user.displayName || 'Language Learner';
-            AppState.userData.email = user.email || '';
-            AppState.userData.photoURL = user.photoURL || '';
-            AppState.userData.uid = user.uid;
-            Storage.save('userData', AppState.userData);
+        function handleAuthSuccess(user, options = {}) {
+            const redirectTo = options.redirectTo || 'dashboard';
+            if (options.resetPreferences) {
+                resetLearningPreferences();
+            }
 
-            // Save/update user profile in Firestore
-            db.collection('users').doc(user.uid).set({
-                name: AppState.userData.name,
-                email: AppState.userData.email,
-                photoURL: AppState.userData.photoURL,
-                streak: AppState.userData.streak || 0,
-                totalXP: AppState.userData.totalXP || 0,
-                currentLevel: AppState.userData.currentLevel || 1,
-                completedLessons: AppState.userData.completedLessons || [],
-                lastLogin: firebase.firestore.FieldValue.serverTimestamp()
-            }, { merge: true })
-                .then(() => navigateTo('dashboard'))
-                .catch(() => navigateTo('dashboard'));
+            hydrateAuthenticatedUser(user)
+                .then(() => navigateTo(redirectTo))
+                .catch(() => navigateTo(redirectTo));
         }
 
         // Main Menu Screen
@@ -2812,7 +2911,10 @@
                 if (confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
                     const user = auth.currentUser;
                     if (user) {
-                        db.collection('users').doc(user.uid).delete()
+                        Promise.all([
+                            db.collection(USER_PROFILE_COLLECTION).doc(user.uid).delete(),
+                            db.collection(USER_ACCOUNT_COLLECTION).doc(user.uid).delete()
+                        ])
                             .then(() => user.delete())
                             .then(() => {
                                 AppState.userData = { name: 'Language Learner', streak: 0, totalXP: 0, currentLevel: 1, completedLessons: [] };
@@ -3079,7 +3181,7 @@
         </svg>
         <span>Sign up with Google</span>
     `;
-            googleBtn.onclick = () => firebaseGoogleLogin();
+            googleBtn.onclick = () => firebaseGoogleLogin('quick-intro', true);
             form.appendChild(googleBtn);
 
             // Divider
@@ -3118,7 +3220,7 @@
                     .then((result) => {
                         // Set display name
                         return result.user.updateProfile({ displayName: name }).then(() => {
-                            handleAuthSuccess(result.user);
+                            handleAuthSuccess(result.user, { redirectTo: 'quick-intro', resetPreferences: true });
                         });
                     })
                     .catch((error) => {
