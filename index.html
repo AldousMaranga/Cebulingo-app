@@ -1853,6 +1853,13 @@
         let selectedAnswer = null;
         let questions = [];
 
+        function getSelectedLesson() {
+            if (!AppState.selectedLessonId) {
+                return null;
+            }
+
+            return AppState.lessonList.find(lesson => lesson.id === AppState.selectedLessonId) || null;
+        }
 
         async function initQuizData() {
             if (!AppState.selectedLessonId) {
@@ -1866,7 +1873,10 @@
                 question: q.question || '',
                 answer: q.answer || '',
                 choices: q.choices || [],
-                type: q.type || 'multiple_choice'
+                type: q.type || 'multiple_choice',
+                imageUrl: q.imageUrl || '',
+                difficulty: q.difficulty || '',
+                lessonType: q.lessonType || ''
             }));
 
             currentQuestionIndex = 0;
@@ -1887,8 +1897,30 @@
         function renderQuestion() {
             const container = document.getElementById('content-container');
             const isMobile = AppState.isMobile;
+            const selectedLesson = getSelectedLesson();
 
             container.innerHTML = '';
+
+            if (!questions.length) {
+                const emptyState = createElement('div', 'flex flex-col items-center justify-center h-full text-center px-6');
+                emptyState.style.backgroundColor = '#1C1C1C';
+
+                const title = createElement('h2', 'text-white mb-3');
+                title.style.fontSize = isMobile ? '24px' : '32px';
+                title.textContent = 'No questions found';
+
+                const description = createElement('p', 'text-[#BEBEBE] mb-6');
+                description.style.maxWidth = '420px';
+                description.textContent = 'This lesson does not have any quiz questions yet.';
+
+                const backBtn = createButton('BACK TO DASHBOARD', () => navigateTo('dashboard'), 'primary', true);
+
+                emptyState.appendChild(title);
+                emptyState.appendChild(description);
+                emptyState.appendChild(backBtn);
+                container.appendChild(emptyState);
+                return;
+            }
 
             const screen = createElement('div', 'flex flex-col h-full');
             screen.style.backgroundColor = '#1C1C1C';
@@ -1919,12 +1951,43 @@
             // Question content
             const content = createElement('div', `flex-1 flex flex-col ${isMobile ? 'px-6 py-4' : 'px-12 py-8'}`);
             const currentQuestion = questions[currentQuestionIndex];
+            const normalizedDifficulty = normalizeDifficulty(currentQuestion.difficulty || selectedLesson?.difficulty);
+            const normalizedLessonType = normalizeValue(currentQuestion.lessonType || selectedLesson?.lessonType || selectedLesson?.type);
+            const shouldShowQuestionImage = Boolean(currentQuestion.imageUrl) &&
+                normalizedDifficulty === 'easy' &&
+                normalizedLessonType === 'image identification';
+
+            if (shouldShowQuestionImage) {
+                const imageWrapper = createElement('div', 'w-full max-w-3xl mx-auto mb-6');
+                imageWrapper.style.display = 'flex';
+                imageWrapper.style.justifyContent = 'center';
+
+                const questionImage = createElement('img', '');
+                questionImage.src = currentQuestion.imageUrl;
+                questionImage.alt = currentQuestion.question || 'Lesson question image';
+                questionImage.loading = 'eager';
+                questionImage.referrerPolicy = 'no-referrer';
+                questionImage.style.width = '100%';
+                questionImage.style.maxWidth = isMobile ? '280px' : '420px';
+                questionImage.style.height = isMobile ? '220px' : '300px';
+                questionImage.style.objectFit = 'cover';
+                questionImage.style.borderRadius = '20px';
+                questionImage.style.backgroundColor = '#2A2A2A';
+                questionImage.style.border = '1px solid #3A3A3A';
+
+                questionImage.onerror = () => {
+                    questionImage.style.display = 'none';
+                };
+
+                imageWrapper.appendChild(questionImage);
+                content.appendChild(imageWrapper);
+            }
 
             // Question text
             const questionText = createElement('div', 'text-center mb-8');
             const instruction = createElement('p', 'text-[#BEBEBE] mb-4');
             instruction.style.fontSize = isMobile ? '14px' : '16px';
-            instruction.textContent = 'What does this mean?';
+            instruction.textContent = shouldShowQuestionImage ? 'What is shown in this image?' : 'What does this mean?';
 
             const cebuanoWord = createElement('h1', 'text-white');
             cebuanoWord.style.fontSize = isMobile ? '32px' : '48px';
@@ -2044,7 +2107,9 @@
                 }, 1500);
             } else {
                 cards[selectedAnswer].style.boxShadow = '0 0 0 4px #EF4444';
-                cards[question.correctIndex].style.boxShadow = '0 0 0 4px #10B981';
+                if (correctIndex >= 0 && cards[correctIndex]) {
+                    cards[correctIndex].style.boxShadow = '0 0 0 4px #10B981';
+                }
                 SoundEffects.playIncorrect();
 
                 setTimeout(() => {
