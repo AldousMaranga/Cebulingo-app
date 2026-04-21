@@ -1940,6 +1940,8 @@
         let isListeningForPronunciation = false;
         let spellingAnswer = '';
         let spellingCheckResult = null;
+        let currentPronunciationMode = 'word';
+        let currentTypingMode = 'word';
 
         function getSelectedLesson() {
             if (!AppState.selectedLessonId) {
@@ -1962,7 +1964,7 @@
                 answer: q.answer || '',
                 choices: q.choices || [],
                 type: q.type || 'multiple_choice',
-                imageUrl: q.imageUrl || '',
+                imageUrl: q.imageUrl || q.imageURL || q.image || q.picture || q.photo || '',
                 difficulty: q.difficulty || '',
                 lessonType: q.lessonType || '',
                 prompt: q.prompt || '',
@@ -2045,12 +2047,29 @@
                 .filter(Boolean);
         }
 
+        function isPhrasePronunciationTypeValue(value) {
+            const normalizedValue = normalizeValue(value);
+
+            return normalizedValue === 'phrase pronunciation' ||
+                normalizedValue === 'phrasepronunciation' ||
+                normalizedValue === 'phrase pronounciation' ||
+                normalizedValue === 'phrasepronounciation' ||
+                normalizedValue === 'phrase_pronunciation' ||
+                normalizedValue === 'phrase_pronounciation';
+        }
+
         function isPronunciationQuestionData(question) {
             const normalizedType = normalizeValue(question?.type);
             const normalizedLessonType = normalizeValue(question?.lessonType);
             const hasRecognitionLang = Boolean((question?.recognitionLang || '').toString().trim());
 
-            if (normalizedType === 'pronunciation' || normalizedLessonType === 'pronunciation' || hasRecognitionLang) {
+            if (
+                normalizedType === 'pronunciation' ||
+                isPhrasePronunciationTypeValue(normalizedType) ||
+                normalizedLessonType === 'pronunciation' ||
+                isPhrasePronunciationTypeValue(normalizedLessonType) ||
+                hasRecognitionLang
+            ) {
                 return true;
             }
 
@@ -2063,11 +2082,40 @@
             const normalizedDifficulty = normalizeDifficulty(question?.difficulty || lesson?.difficulty);
             const hasChoices = Array.isArray(question?.choices) && question.choices.length > 0;
 
-            if (normalizedType === 'spelling' || normalizedLessonType === 'spelling') {
+            if (
+                normalizedType === 'spelling' ||
+                normalizedType === 'phrase typing' ||
+                normalizedType === 'phrasetyping' ||
+                normalizedType === 'phrase_typing' ||
+                normalizedLessonType === 'spelling' ||
+                normalizedLessonType === 'phrase typing' ||
+                normalizedLessonType === 'phrasetyping' ||
+                normalizedLessonType === 'phrase_typing'
+            ) {
                 return true;
             }
 
             return normalizedDifficulty === 'intermediate' && !hasChoices && !isPronunciationQuestionData(question);
+        }
+
+        function isPhraseTypingQuestionData(question, lesson = null) {
+            const normalizedType = normalizeValue(question?.type);
+            const normalizedLessonType = normalizeValue(question?.lessonType || lesson?.lessonType || lesson?.type);
+
+            return normalizedType === 'phrase typing' ||
+                normalizedType === 'phrasetyping' ||
+                normalizedType === 'phrase_typing' ||
+                normalizedLessonType === 'phrase typing' ||
+                normalizedLessonType === 'phrasetyping' ||
+                normalizedLessonType === 'phrase_typing';
+        }
+
+        function isPhrasePronunciationQuestionData(question, lesson = null) {
+            const normalizedType = normalizeValue(question?.type);
+            const normalizedLessonType = normalizeValue(question?.lessonType || lesson?.lessonType || lesson?.type);
+
+            return isPhrasePronunciationTypeValue(normalizedType) ||
+                isPhrasePronunciationTypeValue(normalizedLessonType);
         }
 
         function getAcceptedSpellingAnswers(question) {
@@ -2090,6 +2138,18 @@
             return acceptedAnswers.some((answer) => normalizeValue(answer) === normalizedInput);
         }
 
+        function isPhraseKeywordMatch(input, acceptedAnswers) {
+            const normalizedInput = normalizeValue(input);
+            if (!normalizedInput) {
+                return false;
+            }
+
+            return acceptedAnswers.some((answer) => {
+                const normalizedAnswer = normalizeValue(answer);
+                return Boolean(normalizedAnswer) && normalizedInput.includes(normalizedAnswer);
+            });
+        }
+
         function updateSpellingUiState() {
             const input = document.getElementById('spelling-answer-input');
             const statusText = document.getElementById('spelling-status');
@@ -2107,12 +2167,16 @@
             answerCard.style.boxShadow = '';
 
             if (spellingCheckResult?.isCorrect) {
-                statusText.textContent = 'Correct spelling. Great job!';
+                statusText.textContent = currentTypingMode === 'phrase'
+                    ? 'Correct phrase. Great job!'
+                    : 'Correct spelling. Great job!';
                 statusText.style.color = '#86EFAC';
                 answerCard.style.borderColor = '#10B981';
                 answerCard.style.boxShadow = '0 0 0 3px rgba(16,185,129,0.2)';
             } else if (spellingCheckResult && !spellingCheckResult.isCorrect) {
-                statusText.textContent = `Not quite. Correct spelling: ${spellingCheckResult.expected}`;
+                statusText.textContent = currentTypingMode === 'phrase'
+                    ? `Not quite. Correct phrase: ${spellingCheckResult.expected}`
+                    : `Not quite. Correct spelling: ${spellingCheckResult.expected}`;
                 statusText.style.color = '#FCA5A5';
                 answerCard.style.borderColor = '#EF4444';
                 answerCard.style.boxShadow = '0 0 0 3px rgba(239,68,68,0.18)';
@@ -2207,7 +2271,9 @@
 
             transcriptText.textContent = pronunciationTranscript || 'Your recognized speech will appear here.';
             transcriptText.style.color = pronunciationTranscript ? '#FFFFFF' : '#8A8A8A';
-            listenBtn.textContent = isListeningForPronunciation ? 'LISTENING...' : 'START RECORDING';
+            listenBtn.textContent = isListeningForPronunciation
+                ? 'LISTENING...'
+                : (currentPronunciationMode === 'phrase' ? 'START SPEAKING' : 'START RECORDING');
 
             statusText.textContent = pronunciationError || '';
             statusText.style.color = '#FCA5A5';
@@ -2215,12 +2281,16 @@
             transcriptCard.style.borderColor = '#3A3A3A';
 
             if (pronunciationCheckResult?.isCorrect) {
-                statusText.textContent = 'Correct pronunciation. Great job!';
+                statusText.textContent = currentPronunciationMode === 'phrase'
+                    ? 'Correct phrase pronunciation. Great job!'
+                    : 'Correct pronunciation. Great job!';
                 statusText.style.color = '#86EFAC';
                 transcriptCard.style.borderColor = '#10B981';
                 transcriptCard.style.boxShadow = '0 0 0 3px rgba(16,185,129,0.2)';
             } else if (pronunciationCheckResult && !pronunciationCheckResult.isCorrect) {
-                statusText.textContent = `Not quite. Expected: ${pronunciationCheckResult.expected}`;
+                statusText.textContent = currentPronunciationMode === 'phrase'
+                    ? `Not quite. Expected phrase: ${pronunciationCheckResult.expected}`
+                    : `Not quite. Expected: ${pronunciationCheckResult.expected}`;
                 statusText.style.color = '#FCA5A5';
                 transcriptCard.style.borderColor = '#EF4444';
                 transcriptCard.style.boxShadow = '0 0 0 3px rgba(239,68,68,0.18)';
@@ -2329,9 +2399,17 @@
             const currentQuestion = questions[currentQuestionIndex];
             const normalizedDifficulty = normalizeDifficulty(currentQuestion.difficulty || selectedLesson?.difficulty);
             const normalizedLessonType = normalizeValue(currentQuestion.lessonType || selectedLesson?.lessonType || selectedLesson?.type);
-            const shouldShowQuestionImage = Boolean(currentQuestion.imageUrl) &&
-                normalizedDifficulty === 'easy' &&
-                normalizedLessonType === 'image identification';
+            const isPronunciationQuestion = isPronunciationQuestionData(currentQuestion);
+            const isSpellingQuestion = isSpellingQuestionData(currentQuestion, selectedLesson);
+            const isPhraseTypingQuestion = isPhraseTypingQuestionData(currentQuestion, selectedLesson);
+            const isPhrasePronunciationQuestion = isPhrasePronunciationQuestionData(currentQuestion, selectedLesson);
+            currentPronunciationMode = isPhrasePronunciationQuestion ? 'phrase' : 'word';
+            currentTypingMode = isPhraseTypingQuestion ? 'phrase' : 'word';
+            const shouldShowQuestionImage = Boolean(currentQuestion.imageUrl) && (
+                (normalizedDifficulty === 'easy' && normalizedLessonType === 'image identification') ||
+                isPhraseTypingQuestion ||
+                isPhrasePronunciationQuestion
+            );
 
             if (shouldShowQuestionImage) {
                 const imageWrapper = createElement('div', 'w-full max-w-3xl mx-auto mb-6');
@@ -2363,16 +2441,18 @@
             const questionText = createElement('div', 'text-center mb-8');
             const instruction = createElement('p', 'text-[#BEBEBE] mb-4');
             instruction.style.fontSize = isMobile ? '14px' : '16px';
-            const isPronunciationQuestion = isPronunciationQuestionData(currentQuestion);
-            const isSpellingQuestion = isSpellingQuestionData(currentQuestion, selectedLesson);
             const pronunciationPrompt = getPronunciationPrompt(currentQuestion);
             const pronunciationTarget = getPronunciationTarget(currentQuestion);
             const pronunciationGuide = getPronunciationGuide(currentQuestion);
-            instruction.textContent = isPronunciationQuestion
-                ? 'Listen to the pronunciation, then say the Bisaya word.'
-                : isSpellingQuestion
-                    ? 'Type the Bisaya spelling for this English word.'
-                    : (shouldShowQuestionImage ? 'What is shown in this image?' : 'What does this mean?');
+            instruction.textContent = isPhrasePronunciationQuestion
+                ? 'Look at the clue, then say the complete Bisaya phrase.'
+                : isPhraseTypingQuestion
+                    ? 'Use the clue to type the missing Bisaya word or phrase.'
+                    : isPronunciationQuestion
+                        ? 'Listen to the pronunciation, then say the Bisaya word.'
+                        : isSpellingQuestion
+                            ? 'Type the Bisaya spelling for this English word.'
+                            : (shouldShowQuestionImage ? 'What is shown in this image?' : 'What does this mean?');
 
             const cebuanoWord = createElement('h1', 'text-white');
             cebuanoWord.style.fontSize = isMobile ? '32px' : '48px';
@@ -2381,7 +2461,7 @@
 
             questionText.appendChild(instruction);
 
-            if ((isPronunciationQuestion || isSpellingQuestion) && pronunciationGuide) {
+            if ((isPronunciationQuestion || isSpellingQuestion) && !isPhraseTypingQuestion && !isPhrasePronunciationQuestion && pronunciationGuide) {
                 const promptText = createElement('p', 'text-[#6BB6FF] mb-3');
                 promptText.style.fontSize = isMobile ? '18px' : '20px';
                 promptText.style.fontWeight = '600';
@@ -2391,7 +2471,7 @@
 
             questionText.appendChild(cebuanoWord);
 
-            if (isPronunciationQuestion || isSpellingQuestion) {
+            if ((isPronunciationQuestion || isSpellingQuestion) && !isPhraseTypingQuestion && !isPhrasePronunciationQuestion) {
                 const speakerBtn = createElement('button', 'btn-icon mt-4');
                 speakerBtn.innerHTML = '<i data-lucide="volume-2" style="width: 24px; height: 24px; color: #6BB6FF;"></i>';
                 speakerBtn.onclick = () => TTS.speak(pronunciationTarget, 'fil-PH');
@@ -2443,12 +2523,12 @@
 
                 const answerLabel = createElement('p', 'text-[#BEBEBE] mb-3');
                 answerLabel.style.fontSize = '14px';
-                answerLabel.textContent = 'Type your Bisaya answer';
+                answerLabel.textContent = isPhraseTypingQuestion ? 'Type the missing Bisaya word or phrase' : 'Type your Bisaya answer';
 
                 const spellingInput = createElement('input', 'input');
                 spellingInput.id = 'spelling-answer-input';
                 spellingInput.type = 'text';
-                spellingInput.placeholder = 'Enter the Bisaya spelling';
+                spellingInput.placeholder = isPhraseTypingQuestion ? 'Enter the missing Bisaya word or phrase' : 'Enter the Bisaya spelling';
                 spellingInput.autocapitalize = 'none';
                 spellingInput.autocomplete = 'off';
                 spellingInput.autocorrect = 'off';
@@ -2511,7 +2591,12 @@
             buttonContainer.style.gap = '12px';
 
             if (isPronunciationQuestion) {
-                const listenBtn = createButton('START RECORDING', () => startPronunciationListening(currentQuestion), 'secondary', !isMobile);
+                const listenBtn = createButton(
+                    isPhrasePronunciationQuestion ? 'START SPEAKING' : 'START RECORDING',
+                    () => startPronunciationListening(currentQuestion),
+                    'secondary',
+                    !isMobile
+                );
                 listenBtn.id = 'listen-button';
                 listenBtn.style.height = isMobile ? '56px' : '64px';
                 buttonContainer.appendChild(listenBtn);
@@ -2568,11 +2653,15 @@
             const isPronunciationQuestion = isPronunciationQuestionData(currentQuestion);
             const selectedLesson = getSelectedLesson();
             const isSpellingQuestion = isSpellingQuestionData(currentQuestion, selectedLesson);
+            const isPhraseTypingQuestion = isPhraseTypingQuestionData(currentQuestion, selectedLesson);
+            const isPhrasePronunciationQuestion = isPhrasePronunciationQuestionData(currentQuestion, selectedLesson);
 
             if (isPronunciationQuestion) {
                 const acceptedAnswers = getAcceptedPronunciationAnswers(currentQuestion);
                 const expectedAnswer = acceptedAnswers[0] || getPronunciationTarget(currentQuestion);
-                const isCorrect = isPronunciationMatch(pronunciationTranscript, acceptedAnswers);
+                const isCorrect = isPhrasePronunciationQuestion
+                    ? isPhraseKeywordMatch(pronunciationTranscript, acceptedAnswers)
+                    : isPronunciationMatch(pronunciationTranscript, acceptedAnswers);
                 pronunciationCheckResult = {
                     isCorrect,
                     expected: expectedAnswer
@@ -2607,7 +2696,9 @@
             if (isSpellingQuestion) {
                 const acceptedAnswers = getAcceptedSpellingAnswers(currentQuestion);
                 const expectedAnswer = acceptedAnswers[0] || getPronunciationTarget(currentQuestion);
-                const isCorrect = isSpellingMatch(spellingAnswer, acceptedAnswers);
+                const isCorrect = isPhraseTypingQuestion
+                    ? isPhraseKeywordMatch(spellingAnswer, acceptedAnswers)
+                    : isSpellingMatch(spellingAnswer, acceptedAnswers);
                 spellingCheckResult = {
                     isCorrect,
                     expected: expectedAnswer
