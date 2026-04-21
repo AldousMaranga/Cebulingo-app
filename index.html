@@ -35,6 +35,7 @@
         const googleProvider = new firebase.auth.GoogleAuthProvider();
         const USER_PROFILE_COLLECTION = 'users';
         const USER_ACCOUNT_COLLECTION = 'user_accounts';
+        const LEADERBOARD_COLLECTION = 'leaderboard';
 
     </script>
 
@@ -179,7 +180,7 @@
         function createBottomNav(activeTab) {
             const bottomNav = createElement('div', 'fixed z-30');
             bottomNav.id = 'bottom-nav-bar';
-            bottomNav.style.cssText = 'bottom: 0; left: 0; right: 0; padding: 0.5rem 1rem; padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));';
+            bottomNav.style.cssText = 'position: fixed; z-index: 100; bottom: 0; left: 0; right: 0; padding: 0.5rem 1rem; padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));';
 
             const navBar = createElement('div', 'flex items-center justify-around');
             navBar.style.cssText = 'background: rgba(22,22,22,0.92); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-radius: 1.25rem; padding: 0.5rem 0.25rem; border: 1px solid rgba(255,255,255,0.06); box-shadow: 0 -4px 20px rgba(0,0,0,0.3);';
@@ -1072,20 +1073,40 @@
             Storage.save('userData', AppState.userData);
         }
 
+        function syncLeaderboardProfile(user = auth.currentUser) {
+            if (!user) {
+                return Promise.resolve();
+            }
+
+            const leaderboardPayload = {
+                uid: user.uid,
+                name: AppState.userData.name || user.displayName || 'Language Learner',
+                photoURL: AppState.userData.photoURL || user.photoURL || '',
+                totalXP: Math.max(0, Number(AppState.userData.totalXP) || 0),
+                currentLevel: Math.max(1, Number(AppState.userData.currentLevel) || 1),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            return db.collection(LEADERBOARD_COLLECTION).doc(user.uid).set(leaderboardPayload, { merge: true });
+        }
+
         function syncUserProgressToFirestore(user = auth.currentUser) {
             if (!user) {
                 return Promise.resolve();
             }
 
-            return db.collection(USER_PROFILE_COLLECTION).doc(user.uid).set({
-                streak: AppState.userData.streak ?? 0,
-                totalXP: AppState.userData.totalXP ?? 0,
-                currentLevel: AppState.userData.currentLevel ?? 1,
-                completedLessons: AppState.userData.completedLessons || [],
-                lessonResults: AppState.userData.lessonResults || {},
-                lastActiveDate: AppState.userData.lastActiveDate || '',
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            }, { merge: true });
+            return Promise.all([
+                db.collection(USER_PROFILE_COLLECTION).doc(user.uid).set({
+                    streak: AppState.userData.streak ?? 0,
+                    totalXP: AppState.userData.totalXP ?? 0,
+                    currentLevel: AppState.userData.currentLevel ?? 1,
+                    completedLessons: AppState.userData.completedLessons || [],
+                    lessonResults: AppState.userData.lessonResults || {},
+                    lastActiveDate: AppState.userData.lastActiveDate || '',
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true }),
+                syncLeaderboardProfile(user)
+            ]);
         }
 
         async function updateUserDailyActivity(user = auth.currentUser) {
@@ -1203,10 +1224,12 @@
         async function syncUserDocuments(user, options = {}) {
             const accountRef = db.collection(USER_ACCOUNT_COLLECTION).doc(user.uid);
             const profileRef = db.collection(USER_PROFILE_COLLECTION).doc(user.uid);
+            const leaderboardRef = db.collection(LEADERBOARD_COLLECTION).doc(user.uid);
 
-            const [accountSnapshot, profileSnapshot] = await Promise.all([
+            const [accountSnapshot, profileSnapshot, leaderboardSnapshot] = await Promise.all([
                 accountRef.get(),
-                profileRef.get()
+                profileRef.get(),
+                leaderboardRef.get()
             ]);
 
             const accountPayload = {
@@ -1243,9 +1266,24 @@
                 profilePayload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
             }
 
+            const existingLeaderboard = leaderboardSnapshot.exists ? leaderboardSnapshot.data() : {};
+            const leaderboardPayload = {
+                uid: user.uid,
+                name: profilePayload.name || existingLeaderboard.name || 'Language Learner',
+                photoURL: profilePayload.photoURL || existingLeaderboard.photoURL || '',
+                totalXP: profilePayload.totalXP ?? existingLeaderboard.totalXP ?? 0,
+                currentLevel: profilePayload.currentLevel ?? existingLeaderboard.currentLevel ?? 1,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            if (!leaderboardSnapshot.exists) {
+                leaderboardPayload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+            }
+
             await Promise.all([
                 accountRef.set(accountPayload, { merge: true }),
-                profileRef.set(profilePayload, { merge: true })
+                profileRef.set(profilePayload, { merge: true }),
+                leaderboardRef.set(leaderboardPayload, { merge: true })
             ]);
         }
 
@@ -1944,125 +1982,204 @@
 
         // Leaderboard Screen
 
-        function renderLeaderboard() {
+        async function fetchLeaderboardPlayers(limitCount = 100) {
+            try {
+                console.log('[Leaderboard] Starting fetch', {
+                    collection: LEADERBOARD_COLLECTION,
+                    orderBy: 'totalXP',
+                    direction: 'desc',
+                    limit: limitCount,
+                    currentUserUid: auth.currentUser?.uid || null
+                });
+
+                const snapshot = await db
+                    .collection(LEADERBOARD_COLLECTION)
+                    .orderBy('totalXP', 'desc')
+                    .limit(limitCount)
+                    .get();
+
+                console.log('[Leaderboard] Fetch succeeded', {
+                    count: snapshot.size,
+                    empty: snapshot.empty
+                });
+
+                const players = snapshot.docs.map((doc, index) => {
+                    const data = doc.data() || {};
+                    const xp = Math.max(0, Number(data.totalXP) || 0);
+
+                    return {
+                        uid: doc.id,
+                        rank: index + 1,
+                        name: data.name || data.displayName || 'Language Learner',
+                        photoURL: data.photoURL || '',
+                        xp,
+                        isCurrentUser: Boolean(auth.currentUser && auth.currentUser.uid === doc.id)
+                    };
+                });
+
+                console.log('[Leaderboard] Parsed players preview', players.slice(0, 5));
+                return players;
+            } catch (error) {
+                console.error('[Leaderboard] Fetch failed', {
+                    message: error?.message || 'Unknown error',
+                    code: error?.code || null,
+                    name: error?.name || null,
+                    stack: error?.stack || null,
+                    currentUserUid: auth.currentUser?.uid || null
+                });
+                return null;
+            }
+        }
+
+        function createLeaderboardAvatar(player, size = 56) {
+            if (player.photoURL) {
+                const avatarImage = createElement('img', '');
+                avatarImage.src = player.photoURL;
+                avatarImage.alt = `${player.name} avatar`;
+                avatarImage.style.cssText = `width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(107,182,255,0.35); background: #2A2A2A;`;
+                return avatarImage;
+            }
+
+            const avatarFallback = createElement('div', 'flex items-center justify-center');
+            avatarFallback.style.cssText = `width: ${size}px; height: ${size}px; border-radius: 50%; background: linear-gradient(135deg, #1A73E8 0%, #6BB6FF 100%); color: white; font-size: ${Math.max(18, Math.floor(size * 0.42))}px; font-weight: 700;`;
+            avatarFallback.textContent = (player.name || 'L').trim().charAt(0).toUpperCase() || 'L';
+            return avatarFallback;
+        }
+
+        async function renderLeaderboard() {
             const container = document.getElementById('content-container');
             const isMobile = AppState.isMobile;
+
+            console.log('[Leaderboard] Rendering leaderboard screen');
 
             const screen = createElement('div', 'flex flex-col h-full overflow-y-auto');
             screen.style.backgroundColor = '#1C1C1C';
 
-            // Header
             const header = createElement('div', 'flex items-center justify-between p-4 border-b border-[#2A2A2A]');
             const logo = createElement('h1', 'text-white');
             logo.style.cssText = 'font-size: 18px; font-weight: 700; background: linear-gradient(135deg, #fff 0%, #6BB6FF 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;';
             logo.textContent = 'Ranks';
 
+            const title = createElement('h1', 'text-white');
+            title.style.cssText = `font-size: ${isMobile ? '20px' : '28px'}; font-weight: 700;`;
+            title.textContent = 'Top 100 Players';
+
             header.appendChild(logo);
-
-            const title = createElement('h1', 'text-white flex-1');
-            title.style.fontSize = isMobile ? '20px' : '28px';
-            title.textContent = 'Leaderboard';
-
-            header.appendChild(backBtn);
             header.appendChild(title);
             screen.appendChild(header);
 
-            // Content
             const content = createElement('div', `flex-1 ${isMobile ? 'px-6 py-6' : 'px-12 py-8'}`);
 
-            // Podium
-            const podium = createElement('div', 'podium mb-8');
-
-            const topUsers = [
-                { rank: 2, name: 'Maria Santos', xp: 3500, avatar: '\uD83D\uDC69' },
-                { rank: 1, name: 'Juan Dela Cruz', xp: 4200, avatar: '\uD83D\uDC68' },
-                { rank: 3, name: 'Pedro Garcia', xp: 3100, avatar: '\uD83E\uDDD1' }
-            ];
-
-            [topUsers[0], topUsers[1], topUsers[2]].forEach(user => {
-                const place = createElement('div', 'podium-place');
-
-                const avatar = createElement('div', 'text-4xl mb-2');
-                avatar.textContent = user.avatar;
-
-                const podiumBlock = createElement('div', `podium-block ${user.rank === 1 ? 'first' : user.rank === 2 ? 'second' : 'third'}`);
-                podiumBlock.textContent = user.rank;
-                podiumBlock.style.fontSize = '32px';
-                podiumBlock.style.fontWeight = '700';
-                podiumBlock.style.color = 'white';
-
-                const nameText = createElement('p', 'text-white text-center mt-2');
-                nameText.style.fontSize = '14px';
-                nameText.textContent = user.name;
-
-                const xpText = createElement('p', 'text-[#6BB6FF] text-center');
-                xpText.style.fontSize = '12px';
-                xpText.textContent = `${user.xp} XP`;
-
-                place.appendChild(avatar);
-                place.appendChild(podiumBlock);
-                place.appendChild(nameText);
-                place.appendChild(xpText);
-                podium.appendChild(place);
-            });
-
-            content.appendChild(podium);
-
-            // Rankings list
-            const rankingsList = createElement('div', 'space-y-2');
-
-            const users = [
-                { rank: 4, name: 'You', xp: AppState.userData.totalXP, avatar: '\uD83D\uDC2E', isCurrentUser: true },
-                { rank: 5, name: 'Ana Reyes', xp: 2400, avatar: '\uD83D\uDC69' },
-                { rank: 6, name: 'Carlos Martinez', xp: 2100, avatar: '\uD83D\uDC68' },
-                { rank: 7, name: 'Lisa Wong', xp: 1950, avatar: '\uD83D\uDC69' },
-                { rank: 8, name: 'Miguel Cruz', xp: 1800, avatar: '\uD83E\uDDD1' }
-            ];
-
-            users.forEach(user => {
-                const card = createElement('div', `card p-4 flex items-center gap-4 ${user.isCurrentUser ? 'border-2' : ''}`);
-                if (user.isCurrentUser) {
-                    card.style.borderColor = '#1A73E8';
-                }
-
-                const rank = createElement('div', 'text-white');
-                rank.style.fontSize = '20px';
-                rank.style.fontWeight = '700';
-                rank.style.minWidth = '40px';
-                rank.textContent = `#${user.rank}`;
-
-                const avatar = createElement('div');
-                avatar.style.fontSize = '32px';
-                avatar.textContent = user.avatar;
-
-                const info = createElement('div', 'flex-1');
-                const name = createElement('p', 'text-white');
-                name.style.fontSize = '16px';
-                name.textContent = user.name;
-
-                const xp = createElement('p', 'text-[#BEBEBE]');
-                xp.style.fontSize = '14px';
-                xp.textContent = `${user.xp} XP`;
-
-                info.appendChild(name);
-                info.appendChild(xp);
-
-                card.appendChild(rank);
-                card.appendChild(avatar);
-                card.appendChild(info);
-                rankingsList.appendChild(card);
-            });
-
-            content.appendChild(rankingsList);
+            const loadingCard = createElement('div', 'card p-6');
+            loadingCard.style.cssText = 'text-align: center; color: #BEBEBE;';
+            loadingCard.textContent = 'Loading leaderboard...';
+            content.appendChild(loadingCard);
             screen.appendChild(content);
 
-            // Bottom spacer and nav
             const spacer = createElement('div', '');
             spacer.style.height = '80px';
             screen.appendChild(spacer);
             screen.appendChild(createBottomNav('leaderboard'));
 
             container.appendChild(screen);
+
+            const players = await fetchLeaderboardPlayers(100);
+            content.innerHTML = '';
+
+            console.log('[Leaderboard] Fetch result received in render', {
+                isNull: players === null,
+                count: Array.isArray(players) ? players.length : null
+            });
+
+            if (players === null) {
+                console.error('[Leaderboard] Rendering error state because fetchLeaderboardPlayers returned null');
+                const errorCard = createElement('div', 'card p-6');
+                errorCard.style.cssText = 'text-align: center; color: #FCA5A5;';
+                errorCard.textContent = 'Unable to load the leaderboard right now.';
+                content.appendChild(errorCard);
+            } else if (!players.length) {
+                console.warn('[Leaderboard] No leaderboard records found');
+                const emptyCard = createElement('div', 'card p-6');
+                emptyCard.style.cssText = 'text-align: center; color: #BEBEBE;';
+                emptyCard.textContent = 'No player rankings are available yet.';
+                content.appendChild(emptyCard);
+            } else {
+                const summary = createElement('div', 'mb-6');
+                summary.style.cssText = 'padding: 1rem 1.25rem; border-radius: 1rem; background: linear-gradient(180deg, #262626 0%, #202020 100%); border: 1px solid #2E2E2E;';
+                summary.innerHTML = `<p style="color: white; font-size: 18px; font-weight: 700; margin-bottom: 0.35rem;">Leaderboard</p><p style="color: #BEBEBE; font-size: 14px;">Showing the top ${players.length} players ranked by total XP.</p>`;
+                content.appendChild(summary);
+
+                const topPlayers = players.slice(0, 3);
+                if (topPlayers.length) {
+                    const podium = createElement('div', 'podium mb-8');
+                    const podiumOrder = [1, 0, 2].filter(index => topPlayers[index]);
+
+                    podiumOrder.forEach((playerIndex) => {
+                        const player = topPlayers[playerIndex];
+                        const place = createElement('div', 'podium-place');
+
+                        const avatar = createLeaderboardAvatar(player, isMobile ? 56 : 68);
+                        avatar.style.marginBottom = '0.75rem';
+
+                        const podiumBlock = createElement('div', `podium-block ${player.rank === 1 ? 'first' : player.rank === 2 ? 'second' : 'third'}`);
+                        podiumBlock.textContent = player.rank;
+                        podiumBlock.style.fontSize = '32px';
+                        podiumBlock.style.fontWeight = '700';
+                        podiumBlock.style.color = 'white';
+
+                        const nameText = createElement('p', 'text-white text-center mt-2');
+                        nameText.style.cssText = 'font-size: 14px; font-weight: 600;';
+                        nameText.textContent = player.isCurrentUser ? `${player.name} (You)` : player.name;
+
+                        const xpText = createElement('p', 'text-[#6BB6FF] text-center');
+                        xpText.style.fontSize = '12px';
+                        xpText.textContent = `${player.xp} XP`;
+
+                        place.appendChild(avatar);
+                        place.appendChild(podiumBlock);
+                        place.appendChild(nameText);
+                        place.appendChild(xpText);
+                        podium.appendChild(place);
+                    });
+
+                    content.appendChild(podium);
+                }
+
+                const rankingsList = createElement('div', 'space-y-2');
+
+                players.forEach((player) => {
+                    const card = createElement('div', `card p-4 flex items-center gap-4 ${player.isCurrentUser ? 'border-2' : ''}`);
+                    card.style.backgroundColor = player.isCurrentUser ? 'rgba(26,115,232,0.12)' : '';
+                    if (player.isCurrentUser) {
+                        card.style.borderColor = '#1A73E8';
+                    }
+
+                    const rank = createElement('div', 'text-white');
+                    rank.style.cssText = 'font-size: 20px; font-weight: 700; min-width: 48px;';
+                    rank.textContent = `#${player.rank}`;
+
+                    const avatar = createLeaderboardAvatar(player, 48);
+
+                    const info = createElement('div', 'flex-1');
+                    const name = createElement('p', 'text-white');
+                    name.style.cssText = 'font-size: 16px; font-weight: 600;';
+                    name.textContent = player.isCurrentUser ? `${player.name} (You)` : player.name;
+
+                    const xp = createElement('p', 'text-[#BEBEBE]');
+                    xp.style.fontSize = '14px';
+                    xp.textContent = `${player.xp} XP`;
+
+                    info.appendChild(name);
+                    info.appendChild(xp);
+
+                    card.appendChild(rank);
+                    card.appendChild(avatar);
+                    card.appendChild(info);
+                    rankingsList.appendChild(card);
+                });
+
+                content.appendChild(rankingsList);
+            }
 
             if (typeof lucide !== 'undefined') {
                 lucide.createIcons();
@@ -3832,7 +3949,8 @@
                     if (user) {
                         Promise.all([
                             db.collection(USER_PROFILE_COLLECTION).doc(user.uid).delete(),
-                            db.collection(USER_ACCOUNT_COLLECTION).doc(user.uid).delete()
+                            db.collection(USER_ACCOUNT_COLLECTION).doc(user.uid).delete(),
+                            db.collection(LEADERBOARD_COLLECTION).doc(user.uid).delete()
                         ])
                             .then(() => user.delete())
                             .then(() => {
