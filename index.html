@@ -1938,6 +1938,8 @@
         let pronunciationError = '';
         let pronunciationCheckResult = null;
         let isListeningForPronunciation = false;
+        let spellingAnswer = '';
+        let spellingCheckResult = null;
 
         function getSelectedLesson() {
             if (!AppState.selectedLessonId) {
@@ -1967,7 +1969,7 @@
                 targetText: q.targetText || '',
                 pronunciation: q.pronunciation || q.pronunciationGuide || '',
                 acceptedAnswers: parseAcceptedAnswers(q.acceptedAnswers ?? q.acceptedAnswer ?? ''),
-                recognitionLang: q.recognitionLang || 'fil-PH'
+                recognitionLang: q.recognitionLang || ''
             }));
 
             currentQuestionIndex = 0;
@@ -1991,6 +1993,11 @@
             pronunciationCheckResult = null;
             isListeningForPronunciation = false;
             PronunciationChecker.stopListening();
+        }
+
+        function resetSpellingState() {
+            spellingAnswer = '';
+            spellingCheckResult = null;
         }
 
         function getPronunciationPrompt(question) {
@@ -2040,15 +2047,79 @@
 
         function isPronunciationQuestionData(question) {
             const normalizedType = normalizeValue(question?.type);
-            if (normalizedType === 'pronunciation') {
+            const normalizedLessonType = normalizeValue(question?.lessonType);
+            const hasRecognitionLang = Boolean((question?.recognitionLang || '').toString().trim());
+
+            if (normalizedType === 'pronunciation' || normalizedLessonType === 'pronunciation' || hasRecognitionLang) {
                 return true;
             }
 
-            const hasChoices = Array.isArray(question?.choices) && question.choices.length > 0;
-            const hasTarget = Boolean((question?.targetText || question?.answer || '').toString().trim());
-            const hasPrompt = Boolean((question?.prompt || question?.question || '').toString().trim());
+            return false;
+        }
 
-            return !hasChoices && hasTarget && hasPrompt;
+        function isSpellingQuestionData(question, lesson = null) {
+            const normalizedType = normalizeValue(question?.type);
+            const normalizedLessonType = normalizeValue(question?.lessonType || lesson?.lessonType || lesson?.type);
+            const normalizedDifficulty = normalizeDifficulty(question?.difficulty || lesson?.difficulty);
+            const hasChoices = Array.isArray(question?.choices) && question.choices.length > 0;
+
+            if (normalizedType === 'spelling' || normalizedLessonType === 'spelling') {
+                return true;
+            }
+
+            return normalizedDifficulty === 'intermediate' && !hasChoices && !isPronunciationQuestionData(question);
+        }
+
+        function getAcceptedSpellingAnswers(question) {
+            const answers = [
+                getPronunciationTarget(question),
+                ...(Array.isArray(question.acceptedAnswers) ? question.acceptedAnswers : [])
+            ];
+
+            return answers
+                .map(item => (item || '').toString().trim())
+                .filter(Boolean);
+        }
+
+        function isSpellingMatch(input, acceptedAnswers) {
+            const normalizedInput = normalizeValue(input);
+            if (!normalizedInput) {
+                return false;
+            }
+
+            return acceptedAnswers.some((answer) => normalizeValue(answer) === normalizedInput);
+        }
+
+        function updateSpellingUiState() {
+            const input = document.getElementById('spelling-answer-input');
+            const statusText = document.getElementById('spelling-status');
+            const checkBtn = document.getElementById('check-button');
+            const answerCard = document.getElementById('spelling-answer-card');
+
+            if (!input || !statusText || !checkBtn || !answerCard) {
+                return;
+            }
+
+            input.value = spellingAnswer;
+            statusText.textContent = '';
+            statusText.style.color = '#FCA5A5';
+            answerCard.style.borderColor = '#3A3A3A';
+            answerCard.style.boxShadow = '';
+
+            if (spellingCheckResult?.isCorrect) {
+                statusText.textContent = 'Correct spelling. Great job!';
+                statusText.style.color = '#86EFAC';
+                answerCard.style.borderColor = '#10B981';
+                answerCard.style.boxShadow = '0 0 0 3px rgba(16,185,129,0.2)';
+            } else if (spellingCheckResult && !spellingCheckResult.isCorrect) {
+                statusText.textContent = `Not quite. Correct spelling: ${spellingCheckResult.expected}`;
+                statusText.style.color = '#FCA5A5';
+                answerCard.style.borderColor = '#EF4444';
+                answerCard.style.boxShadow = '0 0 0 3px rgba(239,68,68,0.18)';
+            }
+
+            checkBtn.disabled = !spellingAnswer.trim();
+            checkBtn.style.opacity = checkBtn.disabled ? '0.5' : '1';
         }
 
         function getAcceptedPronunciationAnswers(question) {
@@ -2293,21 +2364,24 @@
             const instruction = createElement('p', 'text-[#BEBEBE] mb-4');
             instruction.style.fontSize = isMobile ? '14px' : '16px';
             const isPronunciationQuestion = isPronunciationQuestionData(currentQuestion);
+            const isSpellingQuestion = isSpellingQuestionData(currentQuestion, selectedLesson);
             const pronunciationPrompt = getPronunciationPrompt(currentQuestion);
             const pronunciationTarget = getPronunciationTarget(currentQuestion);
             const pronunciationGuide = getPronunciationGuide(currentQuestion);
             instruction.textContent = isPronunciationQuestion
                 ? 'Listen to the pronunciation, then say the Bisaya word.'
-                : (shouldShowQuestionImage ? 'What is shown in this image?' : 'What does this mean?');
+                : isSpellingQuestion
+                    ? 'Type the Bisaya spelling for this English word.'
+                    : (shouldShowQuestionImage ? 'What is shown in this image?' : 'What does this mean?');
 
             const cebuanoWord = createElement('h1', 'text-white');
             cebuanoWord.style.fontSize = isMobile ? '32px' : '48px';
             cebuanoWord.style.fontWeight = '700';
-            cebuanoWord.textContent = isPronunciationQuestion ? pronunciationPrompt : currentQuestion.question;
+            cebuanoWord.textContent = (isPronunciationQuestion || isSpellingQuestion) ? pronunciationPrompt : currentQuestion.question;
 
             questionText.appendChild(instruction);
 
-            if (isPronunciationQuestion && pronunciationGuide) {
+            if ((isPronunciationQuestion || isSpellingQuestion) && pronunciationGuide) {
                 const promptText = createElement('p', 'text-[#6BB6FF] mb-3');
                 promptText.style.fontSize = isMobile ? '18px' : '20px';
                 promptText.style.fontWeight = '600';
@@ -2317,7 +2391,7 @@
 
             questionText.appendChild(cebuanoWord);
 
-            if (isPronunciationQuestion) {
+            if (isPronunciationQuestion || isSpellingQuestion) {
                 const speakerBtn = createElement('button', 'btn-icon mt-4');
                 speakerBtn.innerHTML = '<i data-lucide="volume-2" style="width: 24px; height: 24px; color: #6BB6FF;"></i>';
                 speakerBtn.onclick = () => TTS.speak(pronunciationTarget, 'fil-PH');
@@ -2327,6 +2401,7 @@
             content.appendChild(questionText);
 
             resetPronunciationState();
+            resetSpellingState();
 
             if (isPronunciationQuestion) {
                 const pronunciationPanel = createElement('div', 'flex-1 max-w-3xl mx-auto w-full');
@@ -2357,6 +2432,53 @@
                 transcriptCard.appendChild(statusText);
                 pronunciationPanel.appendChild(transcriptCard);
                 content.appendChild(pronunciationPanel);
+            } else if (isSpellingQuestion) {
+                const spellingPanel = createElement('div', 'flex-1 max-w-3xl mx-auto w-full');
+
+                const answerCard = createElement('div', 'card p-6');
+                answerCard.id = 'spelling-answer-card';
+                answerCard.style.backgroundColor = '#2A2A2A';
+                answerCard.style.border = '1px solid #3A3A3A';
+                answerCard.style.borderRadius = '20px';
+
+                const answerLabel = createElement('p', 'text-[#BEBEBE] mb-3');
+                answerLabel.style.fontSize = '14px';
+                answerLabel.textContent = 'Type your Bisaya answer';
+
+                const spellingInput = createElement('input', 'input');
+                spellingInput.id = 'spelling-answer-input';
+                spellingInput.type = 'text';
+                spellingInput.placeholder = 'Enter the Bisaya spelling';
+                spellingInput.autocapitalize = 'none';
+                spellingInput.autocomplete = 'off';
+                spellingInput.autocorrect = 'off';
+                spellingInput.spellcheck = false;
+                spellingInput.style.fontSize = isMobile ? '18px' : '20px';
+                spellingInput.style.height = isMobile ? '56px' : '64px';
+                spellingInput.style.backgroundColor = '#1C1C1C';
+                spellingInput.oninput = (event) => {
+                    spellingAnswer = event.target.value || '';
+                    if (spellingCheckResult) {
+                        spellingCheckResult = null;
+                    }
+                    updateSpellingUiState();
+                };
+                spellingInput.onkeydown = (event) => {
+                    if (event.key === 'Enter' && !document.getElementById('check-button')?.disabled) {
+                        checkAnswer();
+                    }
+                };
+
+                const statusText = createElement('p', 'mt-4');
+                statusText.id = 'spelling-status';
+                statusText.style.minHeight = '24px';
+                statusText.style.fontSize = '14px';
+
+                answerCard.appendChild(answerLabel);
+                answerCard.appendChild(spellingInput);
+                answerCard.appendChild(statusText);
+                spellingPanel.appendChild(answerCard);
+                content.appendChild(spellingPanel);
             } else {
                 const optionsGrid = createElement('div', `grid ${isMobile ? 'grid-2' : 'grid-2'} gap-4 flex-1 max-w-3xl mx-auto w-full`);
 
@@ -2417,6 +2539,9 @@
 
             if (isPronunciationQuestion) {
                 updatePronunciationUiState();
+            } else if (isSpellingQuestion) {
+                updateSpellingUiState();
+                document.getElementById('spelling-answer-input')?.focus();
             }
         }
 
@@ -2441,6 +2566,8 @@
         function checkAnswer() {
             const currentQuestion = questions[currentQuestionIndex];
             const isPronunciationQuestion = isPronunciationQuestionData(currentQuestion);
+            const selectedLesson = getSelectedLesson();
+            const isSpellingQuestion = isSpellingQuestionData(currentQuestion, selectedLesson);
 
             if (isPronunciationQuestion) {
                 const acceptedAnswers = getAcceptedPronunciationAnswers(currentQuestion);
@@ -2451,6 +2578,41 @@
                     expected: expectedAnswer
                 };
                 updatePronunciationUiState();
+
+                const checkBtn = document.getElementById('check-button');
+                if (checkBtn) {
+                    checkBtn.disabled = true;
+                    checkBtn.style.opacity = '0.5';
+                }
+
+                if (isCorrect) {
+                    SoundEffects.playCorrect();
+                    score++;
+                } else {
+                    SoundEffects.playIncorrect();
+                }
+
+                setTimeout(() => {
+                    if (currentQuestionIndex < questions.length - 1) {
+                        currentQuestionIndex++;
+                        renderQuestion();
+                    } else {
+                        navigateTo('lesson-complete');
+                    }
+                }, isCorrect ? 1500 : 2200);
+
+                return;
+            }
+
+            if (isSpellingQuestion) {
+                const acceptedAnswers = getAcceptedSpellingAnswers(currentQuestion);
+                const expectedAnswer = acceptedAnswers[0] || getPronunciationTarget(currentQuestion);
+                const isCorrect = isSpellingMatch(spellingAnswer, acceptedAnswers);
+                spellingCheckResult = {
+                    isCorrect,
+                    expected: expectedAnswer
+                };
+                updateSpellingUiState();
 
                 const checkBtn = document.getElementById('check-button');
                 if (checkBtn) {
