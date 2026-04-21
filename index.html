@@ -57,15 +57,21 @@
             isMobile: true,
             userData: {
                 name: 'Language Learner',
-                streak: 28,
-                totalXP: 2580,
-                currentLevel: 3,
-                completedLessons: []
+                email: '',
+                photoURL: '',
+                uid: '',
+                streak: 0,
+                totalXP: 0,
+                currentLevel: 1,
+                completedLessons: [],
+                lessonResults: {},
+                lastActiveDate: ''
             },
             lessonData: {
                 currentScore: 0,
                 totalQuestions: 0,
-                wrongQuestions: []
+                wrongQuestions: [],
+                completionSummary: null
             },
             lessonList: [],
             selectedLessonId: null,
@@ -129,7 +135,7 @@
                 }
 
                 if (!user && requiresAuth(AppState.currentScreen)) {
-                    AppState.userData = { name: 'Language Learner', streak: 0, totalXP: 0, currentLevel: 1, completedLessons: [] };
+                    AppState.userData = createDefaultUserData();
                     AppState.selectedLessonId = null;
                     AppState.selectedLessonTitle = null;
                     Storage.clear('userData');
@@ -262,6 +268,21 @@
                 }
             }
         };
+
+        function createDefaultUserData() {
+            return {
+                name: 'Language Learner',
+                email: '',
+                photoURL: '',
+                uid: '',
+                streak: 0,
+                totalXP: 0,
+                currentLevel: 1,
+                completedLessons: [],
+                lessonResults: {},
+                lastActiveDate: ''
+            };
+        }
 
         const MicrophoneAccess = {
             async ensurePermission() {
@@ -961,6 +982,191 @@
             return 100;
         }
 
+        function getLocalDateKey(date = new Date()) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function getYesterdayDateKey(baseDate = new Date()) {
+            const yesterday = new Date(baseDate);
+            yesterday.setDate(yesterday.getDate() - 1);
+            return getLocalDateKey(yesterday);
+        }
+
+        function getLessonCompletionKey(lesson = null) {
+            return lesson?.id || lesson?.title || AppState.selectedLessonId || AppState.selectedLessonTitle || '';
+        }
+
+        function getCompletedLessonsCount() {
+            const completedLessons = Array.isArray(AppState.userData.completedLessons)
+                ? AppState.userData.completedLessons
+                : [];
+
+            return new Set(completedLessons.filter(Boolean)).size;
+        }
+
+        function calculateLevelFromXp(totalXP) {
+            const xp = Math.max(0, Number(totalXP) || 0);
+            return Math.max(1, Math.floor(xp / 1000) + 1);
+        }
+
+        function calculateLessonPercentage(correctAnswers, totalQuestions) {
+            const safeTotalQuestions = Math.max(0, Number(totalQuestions) || 0);
+            if (!safeTotalQuestions) {
+                return 0;
+            }
+
+            const safeCorrectAnswers = Math.max(0, Number(correctAnswers) || 0);
+            return Math.round((safeCorrectAnswers / safeTotalQuestions) * 100);
+        }
+
+        function calculateLessonXpAward(percentageScore) {
+            const percentage = Math.max(0, Math.min(100, Number(percentageScore) || 0));
+            if (percentage < 50) {
+                return 0;
+            }
+
+            if (percentage === 100) {
+                return 500;
+            }
+
+            return Math.round(200 + ((percentage - 50) / 50) * 300);
+        }
+
+        function getStarsForPercentage(percentageScore) {
+            const percentage = Math.max(0, Math.min(100, Number(percentageScore) || 0));
+            if (percentage >= 100) return 3;
+            if (percentage >= 75) return 2;
+            if (percentage >= 50) return 1;
+            return 0;
+        }
+
+        function getLiveProfileAchievements() {
+            const completedLessonsCount = getCompletedLessonsCount();
+            const totalXP = Math.max(0, Number(AppState.userData.totalXP) || 0);
+            const streak = Math.max(0, Number(AppState.userData.streak) || 0);
+            const lessonResults = AppState.userData.lessonResults || {};
+            const hasPerfectLesson = Object.values(lessonResults).some(result => Number(result?.percentage) === 100);
+            const groupedLessons = getGroupedLessonsByPathway(AppState.lessonList || []);
+            const totalLessons = Array.isArray(AppState.lessonList) ? AppState.lessonList.length : 0;
+            const completedAllLessons = totalLessons > 0 && completedLessonsCount >= totalLessons;
+            const completedAnyPathway = groupedLessons.some(group =>
+                Array.isArray(group.lessons) &&
+                group.lessons.length > 0 &&
+                group.lessons.every(lesson => isLessonCompleted(lesson))
+            );
+
+            return [
+                { id: 1, title: 'First Steps', desc: 'Complete your first lesson', icon: '\uD83C\uDFAF', unlocked: completedLessonsCount >= 1 },
+                { id: 2, title: 'Week Warrior', desc: 'Maintain a 7-day streak', icon: '\uD83D\uDD25', unlocked: streak >= 7 },
+                { id: 3, title: 'XP Master', desc: 'Earn 1000 XP', icon: '\u2B50', unlocked: totalXP >= 1000 },
+                { id: 4, title: 'Perfect Score', desc: 'Get 100% on any lesson', icon: '\uD83D\uDCAF', unlocked: hasPerfectLesson },
+                { id: 5, title: 'Unit Champion', desc: 'Complete every lesson in one pathway', icon: '\uD83C\uDFC6', unlocked: completedAnyPathway },
+                { id: 6, title: 'Polyglot', desc: 'Complete all available lessons', icon: '\uD83C\uDF1F', unlocked: completedAllLessons }
+            ];
+        }
+
+        function saveUserDataLocally() {
+            Storage.save('userData', AppState.userData);
+        }
+
+        function syncUserProgressToFirestore(user = auth.currentUser) {
+            if (!user) {
+                return Promise.resolve();
+            }
+
+            return db.collection(USER_PROFILE_COLLECTION).doc(user.uid).set({
+                streak: AppState.userData.streak ?? 0,
+                totalXP: AppState.userData.totalXP ?? 0,
+                currentLevel: AppState.userData.currentLevel ?? 1,
+                completedLessons: AppState.userData.completedLessons || [],
+                lessonResults: AppState.userData.lessonResults || {},
+                lastActiveDate: AppState.userData.lastActiveDate || '',
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+        }
+
+        async function updateUserDailyActivity(user = auth.currentUser) {
+            const today = getLocalDateKey();
+            const lastActiveDate = AppState.userData.lastActiveDate || '';
+
+            if (lastActiveDate === today) {
+                return;
+            }
+
+            AppState.userData.streak = lastActiveDate === getYesterdayDateKey()
+                ? Math.max(0, Number(AppState.userData.streak) || 0) + 1
+                : 1;
+            AppState.userData.lastActiveDate = today;
+            saveUserDataLocally();
+
+            try {
+                await syncUserProgressToFirestore(user);
+            } catch (error) {
+                console.error('Failed to sync daily activity:', error);
+            }
+        }
+
+        function buildLessonCompletionSummary() {
+            const totalQuestions = questions.length || AppState.lessonData.totalQuestions || 0;
+            const percentageScore = calculateLessonPercentage(score, totalQuestions);
+            const passed = percentageScore >= 50;
+            const xpAwarded = calculateLessonXpAward(percentageScore);
+            const starsEarned = getStarsForPercentage(percentageScore);
+
+            return {
+                score,
+                totalQuestions,
+                percentageScore,
+                passed,
+                xpAwarded,
+                starsEarned
+            };
+        }
+
+        function finalizeLessonAttempt() {
+            if (AppState.lessonData.completionSummary) {
+                return AppState.lessonData.completionSummary;
+            }
+
+            const selectedLesson = getSelectedLesson();
+            const completionKey = getLessonCompletionKey(selectedLesson);
+            const summary = buildLessonCompletionSummary();
+
+            if (summary.passed) {
+                const completedLessons = new Set(Array.isArray(AppState.userData.completedLessons) ? AppState.userData.completedLessons : []);
+                if (completionKey) {
+                    completedLessons.add(completionKey);
+                }
+
+                AppState.userData.completedLessons = Array.from(completedLessons);
+                AppState.userData.totalXP = Math.max(0, Number(AppState.userData.totalXP) || 0) + summary.xpAwarded;
+                AppState.userData.currentLevel = calculateLevelFromXp(AppState.userData.totalXP);
+
+                if (completionKey) {
+                    AppState.userData.lessonResults = {
+                        ...(AppState.userData.lessonResults || {}),
+                        [completionKey]: {
+                            lessonId: selectedLesson?.id || AppState.selectedLessonId || '',
+                            lessonTitle: selectedLesson?.title || AppState.selectedLessonTitle || '',
+                            percentage: summary.percentageScore,
+                            xpAwarded: summary.xpAwarded,
+                            starsEarned: summary.starsEarned,
+                            completedAt: getLocalDateKey()
+                        }
+                    };
+                }
+
+                saveUserDataLocally();
+                syncUserProgressToFirestore().catch(err => console.error('Firestore sync failed:', err));
+            }
+
+            AppState.lessonData.completionSummary = summary;
+            return summary;
+        }
+
         function getLessonButtonIcon(lesson, state) {
             const lessonType = normalizeValue(lesson.type);
 
@@ -1027,6 +1233,8 @@
                 totalXP: existingProfile.totalXP ?? AppState.userData.totalXP ?? 0,
                 currentLevel: existingProfile.currentLevel ?? AppState.userData.currentLevel ?? 1,
                 completedLessons: existingProfile.completedLessons ?? AppState.userData.completedLessons ?? [],
+                lessonResults: existingProfile.lessonResults ?? AppState.userData.lessonResults ?? {},
+                lastActiveDate: existingProfile.lastActiveDate ?? AppState.userData.lastActiveDate ?? '',
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                 lastLogin: firebase.firestore.FieldValue.serverTimestamp()
             };
@@ -1059,9 +1267,12 @@
                 AppState.userData.totalXP = data.totalXP ?? AppState.userData.totalXP;
                 AppState.userData.currentLevel = data.currentLevel ?? AppState.userData.currentLevel;
                 AppState.userData.completedLessons = data.completedLessons || AppState.userData.completedLessons;
+                AppState.userData.lessonResults = data.lessonResults || AppState.userData.lessonResults;
+                AppState.userData.lastActiveDate = data.lastActiveDate || AppState.userData.lastActiveDate;
             }
 
-            Storage.save('userData', AppState.userData);
+            await updateUserDailyActivity(user);
+            saveUserDataLocally();
         }
 
 
@@ -1863,6 +2074,7 @@
         function renderLessonComplete() {
             const container = document.getElementById('content-container');
             const isMobile = AppState.isMobile;
+            const summary = finalizeLessonAttempt();
 
             const screen = createElement('div', 'flex flex-col h-full items-center justify-center relative');
             screen.style.backgroundColor = '#1C1C1C';
@@ -1881,12 +2093,14 @@
             const title = createElement('h1', 'text-white mb-2');
             title.style.fontSize = isMobile ? '36px' : '48px';
             title.style.fontWeight = '700';
-            title.textContent = 'Lesson Complete!';
+            title.textContent = summary.passed ? 'Lesson Complete!' : 'Retake Needed';
 
             // Score
             const scoreText = createElement('p', 'text-[#BEBEBE] mb-4');
             scoreText.style.fontSize = isMobile ? '18px' : '22px';
-            scoreText.textContent = `You earned ${score * 50} XP!`;
+            scoreText.textContent = summary.passed
+                ? `You scored ${summary.percentageScore}% and earned ${summary.xpAwarded} XP.`
+                : `You scored ${summary.percentageScore}%. Reach at least 50% to complete this lesson.`;
 
             content.appendChild(title);
             content.appendChild(scoreText);
@@ -1895,33 +2109,34 @@
             const starsContainer = createElement('div', 'flex items-center justify-center gap-2 mb-8');
             for (let i = 0; i < 3; i++) {
                 const star = createElement('span');
-                star.innerHTML = `<i data-lucide="star" style="width: ${isMobile ? '40px' : '56px'}; height: ${isMobile ? '40px' : '56px'}; color: #FFD700; fill: ${i < score ? '#FFD700' : 'none'};"></i>`;
+                star.innerHTML = `<i data-lucide="star" style="width: ${isMobile ? '40px' : '56px'}; height: ${isMobile ? '40px' : '56px'}; color: #FFD700; fill: ${i < summary.starsEarned ? '#FFD700' : 'none'};"></i>`;
                 starsContainer.appendChild(star);
             }
             content.appendChild(starsContainer);
 
             // Button
-            const buttonContainer = createElement('div', `w-full max-w-md mx-auto`);
-            const continueBtn = createButton('CONTINUE', () => navigateTo('dashboard'), 'primary', true);
-            continueBtn.style.height = isMobile ? '56px' : '64px';
-            buttonContainer.appendChild(continueBtn);
+            const buttonContainer = createElement('div', `w-full max-w-md mx-auto space-y-3`);
+            const primaryBtn = createButton(summary.passed ? 'CONTINUE' : 'RETAKE LESSON', () => {
+                if (summary.passed) {
+                    navigateTo('dashboard');
+                    return;
+                }
+
+                navigateTo('lesson-reviewer');
+            }, 'primary', true);
+            primaryBtn.style.height = isMobile ? '56px' : '64px';
+            buttonContainer.appendChild(primaryBtn);
+
+            if (!summary.passed) {
+                const secondaryBtn = createButton('BACK TO DASHBOARD', () => navigateTo('dashboard'), 'secondary', true);
+                secondaryBtn.style.height = isMobile ? '48px' : '56px';
+                buttonContainer.appendChild(secondaryBtn);
+            }
+
             content.appendChild(buttonContainer);
 
             screen.appendChild(content);
             container.appendChild(screen);
-
-            // Update user data
-            AppState.userData.totalXP += score * 50;
-            Storage.save('userData', AppState.userData);
-
-            // Sync with Firestore if logged in
-            const user = auth.currentUser;
-            if (user) {
-                db.collection(USER_PROFILE_COLLECTION).doc(user.uid).update({
-                    totalXP: AppState.userData.totalXP,
-                    lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
-                }).catch(err => console.error("Firestore sync failed:", err));
-            }
 
             if (typeof lucide !== 'undefined') {
                 lucide.createIcons();
@@ -1977,6 +2192,10 @@
             currentQuestionIndex = 0;
             score = 0;
             selectedAnswer = null;
+            AppState.lessonData.totalQuestions = questions.length;
+            AppState.lessonData.currentScore = 0;
+            AppState.lessonData.wrongQuestions = [];
+            AppState.lessonData.completionSummary = null;
         }
 
         // function renderLessonGameplay() {
@@ -3308,6 +3527,8 @@
         function renderProfile() {
             const container = document.getElementById('content-container');
             const isMobile = AppState.isMobile;
+            const completedLessonsCount = getCompletedLessonsCount();
+            const achievements = getLiveProfileAchievements();
 
             const screen = createElement('div', 'flex flex-col h-full overflow-y-auto');
             screen.style.backgroundColor = '#1C1C1C';
@@ -3363,7 +3584,7 @@
             const stats = [
                 { label: 'Day Streak', value: AppState.userData.streak, icon: 'flame', color: '#FF6B35' },
                 { label: 'Total XP', value: AppState.userData.totalXP, icon: 'star', color: '#FFD700' },
-                { label: 'Lessons Done', value: 7, icon: 'check-circle', color: '#10B981' }
+                { label: 'Lessons Done', value: completedLessonsCount, icon: 'check-circle', color: '#10B981' }
             ];
 
             stats.forEach(stat => {
@@ -3391,15 +3612,6 @@
             achievementsTitle.style.fontSize = isMobile ? '20px' : '24px';
             achievementsTitle.textContent = 'Achievements';
             content.appendChild(achievementsTitle);
-
-            const achievements = [
-                { id: 1, title: 'First Steps', desc: 'Complete your first lesson', icon: '\uD83C\uDFAF', unlocked: true },
-                { id: 2, title: 'Week Warrior', desc: 'Maintain a 7-day streak', icon: '\uD83D\uDD25', unlocked: true },
-                { id: 3, title: 'XP Master', desc: 'Earn 1000 XP', icon: '\u2B50', unlocked: true },
-                { id: 4, title: 'Perfect Score', desc: 'Get 3 stars on any lesson', icon: '\uD83D\uDCAF', unlocked: true },
-                { id: 5, title: 'Unit Champion', desc: 'Complete an entire unit', icon: '\uD83C\uDFC6', unlocked: false },
-                { id: 6, title: 'Polyglot', desc: 'Complete all modules', icon: '\uD83C\uDF1F', unlocked: false }
-            ];
 
             const achievementsGrid = createElement('div', 'space-y-3');
 
@@ -3436,8 +3648,6 @@
 
                 achievementsGrid.appendChild(achCard);
             });
-
-            content.appendChild(achievementsGrid);
 
             content.appendChild(achievementsGrid);
 
@@ -3605,7 +3815,7 @@
             logoutRow.innerHTML = '<i data-lucide="log-out" style="width: 18px; height: 18px; color: #EF4444;"></i><span style="color: #EF4444; font-size: 15px; font-weight: 500;">Log Out</span>';
             logoutRow.onclick = () => {
                 auth.signOut().then(() => {
-                    AppState.userData = { name: 'Language Learner', streak: 0, totalXP: 0, currentLevel: 1, completedLessons: [] };
+                    AppState.userData = createDefaultUserData();
                     Storage.clear('userData');
                     navigateTo('main-menu');
                 });
@@ -3626,7 +3836,7 @@
                         ])
                             .then(() => user.delete())
                             .then(() => {
-                                AppState.userData = { name: 'Language Learner', streak: 0, totalXP: 0, currentLevel: 1, completedLessons: [] };
+                                AppState.userData = createDefaultUserData();
                                 Storage.clear('userData');
                                 navigateTo('main-menu');
                             })
