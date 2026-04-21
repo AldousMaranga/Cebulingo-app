@@ -263,6 +263,87 @@
             }
         };
 
+        const MicrophoneAccess = {
+            async ensurePermission() {
+                if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+                    throw new Error('This browser does not support microphone access.');
+                }
+
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream.getTracks().forEach(track => track.stop());
+                return true;
+            }
+        };
+
+        const PronunciationChecker = {
+            recognition: null,
+            getRecognitionConstructor() {
+                return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+            },
+            isSupported() {
+                return Boolean(this.getRecognitionConstructor());
+            },
+            startListening({
+                lang = 'fil-PH',
+                onStart = () => { },
+                onResult = () => { },
+                onError = () => { },
+                onEnd = () => { }
+            } = {}) {
+                const RecognitionConstructor = this.getRecognitionConstructor();
+
+                if (!RecognitionConstructor) {
+                    onError('Speech recognition is not supported in this browser. Please use Chrome or Edge.');
+                    onEnd();
+                    return;
+                }
+
+                if (this.recognition) {
+                    this.stopListening();
+                }
+
+                const recognition = new RecognitionConstructor();
+                recognition.lang = lang;
+                recognition.interimResults = false;
+                recognition.continuous = false;
+                recognition.maxAlternatives = 3;
+
+                recognition.onstart = () => onStart();
+                recognition.onresult = (event) => {
+                    const transcript = Array.from(event.results || [])
+                        .map((result) => result[0]?.transcript || '')
+                        .join(' ')
+                        .trim();
+
+                    onResult(transcript);
+                };
+                recognition.onerror = (event) => {
+                    const errorMap = {
+                        'not-allowed': 'Microphone permission was denied.',
+                        'no-speech': 'No speech was detected. Please try again.',
+                        'audio-capture': 'No microphone was detected on this device.',
+                        'network': 'Speech recognition needs an internet connection in this browser.',
+                        'aborted': 'Listening was cancelled.'
+                    };
+
+                    onError(errorMap[event.error] || 'Speech recognition failed. Please try again.');
+                };
+                recognition.onend = () => {
+                    this.recognition = null;
+                    onEnd();
+                };
+
+                this.recognition = recognition;
+                recognition.start();
+            },
+            stopListening() {
+                if (this.recognition) {
+                    this.recognition.stop();
+                    this.recognition = null;
+                }
+            }
+        };
+
         // Save user data periodically
         setInterval(() => {
             Storage.save('userData', AppState.userData);
@@ -322,6 +403,7 @@
 
             // Stop any ongoing speech
             TTS.stop();
+            PronunciationChecker.stopListening();
 
             // Check if admin page
             const isAdminPage = screen === 'admin-login' || screen === 'admin-dashboard';
@@ -1852,6 +1934,10 @@
         let score = 0;
         let selectedAnswer = null;
         let questions = [];
+        let pronunciationTranscript = '';
+        let pronunciationError = '';
+        let pronunciationCheckResult = null;
+        let isListeningForPronunciation = false;
 
         function getSelectedLesson() {
             if (!AppState.selectedLessonId) {
@@ -1876,7 +1962,12 @@
                 type: q.type || 'multiple_choice',
                 imageUrl: q.imageUrl || '',
                 difficulty: q.difficulty || '',
-                lessonType: q.lessonType || ''
+                lessonType: q.lessonType || '',
+                prompt: q.prompt || '',
+                targetText: q.targetText || '',
+                pronunciation: q.pronunciation || q.pronunciationGuide || '',
+                acceptedAnswers: parseAcceptedAnswers(q.acceptedAnswers ?? q.acceptedAnswer ?? ''),
+                recognitionLang: q.recognitionLang || 'fil-PH'
             }));
 
             currentQuestionIndex = 0;
@@ -1892,6 +1983,220 @@
         async function renderLessonGameplay() {
             await initQuizData();
             renderQuestion();
+        }
+
+        function resetPronunciationState() {
+            pronunciationTranscript = '';
+            pronunciationError = '';
+            pronunciationCheckResult = null;
+            isListeningForPronunciation = false;
+            PronunciationChecker.stopListening();
+        }
+
+        function getPronunciationPrompt(question) {
+            return question.prompt || question.question || '';
+        }
+
+        function getPronunciationTarget(question) {
+            return question.targetText || question.answer || question.question || '';
+        }
+
+        function getPronunciationGuide(question) {
+            return question.pronunciation || question.pronunciationGuide || '';
+        }
+
+        function parseAcceptedAnswers(value) {
+            if (Array.isArray(value)) {
+                return value
+                    .map(item => (item || '').toString().trim())
+                    .filter(Boolean);
+            }
+
+            if (typeof value !== 'string') {
+                return [];
+            }
+
+            const trimmedValue = value.trim();
+            if (!trimmedValue) {
+                return [];
+            }
+
+            try {
+                const parsedValue = JSON.parse(trimmedValue);
+                if (Array.isArray(parsedValue)) {
+                    return parsedValue
+                        .map(item => (item || '').toString().trim())
+                        .filter(Boolean);
+                }
+            } catch (error) {
+                // Fall back to plain text parsing below.
+            }
+
+            return trimmedValue
+                .split(',')
+                .map(item => item.replace(/^["'\[\]\s]+|["'\[\]\s]+$/g, '').trim())
+                .filter(Boolean);
+        }
+
+        function isPronunciationQuestionData(question) {
+            const normalizedType = normalizeValue(question?.type);
+            if (normalizedType === 'pronunciation') {
+                return true;
+            }
+
+            const hasChoices = Array.isArray(question?.choices) && question.choices.length > 0;
+            const hasTarget = Boolean((question?.targetText || question?.answer || '').toString().trim());
+            const hasPrompt = Boolean((question?.prompt || question?.question || '').toString().trim());
+
+            return !hasChoices && hasTarget && hasPrompt;
+        }
+
+        function getAcceptedPronunciationAnswers(question) {
+            const answers = [
+                getPronunciationTarget(question),
+                ...(Array.isArray(question.acceptedAnswers) ? question.acceptedAnswers : [])
+            ];
+
+            return answers
+                .map(item => (item || '').toString().trim())
+                .filter(Boolean);
+        }
+
+        function getLevenshteinDistance(source, target) {
+            const sourceText = source || '';
+            const targetText = target || '';
+            const matrix = Array.from({ length: sourceText.length + 1 }, () => new Array(targetText.length + 1).fill(0));
+
+            for (let row = 0; row <= sourceText.length; row++) {
+                matrix[row][0] = row;
+            }
+
+            for (let column = 0; column <= targetText.length; column++) {
+                matrix[0][column] = column;
+            }
+
+            for (let row = 1; row <= sourceText.length; row++) {
+                for (let column = 1; column <= targetText.length; column++) {
+                    const cost = sourceText[row - 1] === targetText[column - 1] ? 0 : 1;
+                    matrix[row][column] = Math.min(
+                        matrix[row - 1][column] + 1,
+                        matrix[row][column - 1] + 1,
+                        matrix[row - 1][column - 1] + cost
+                    );
+                }
+            }
+
+            return matrix[sourceText.length][targetText.length];
+        }
+
+        function isPronunciationMatch(transcript, acceptedAnswers) {
+            const normalizedTranscript = normalizeValue(transcript);
+
+            if (!normalizedTranscript) {
+                return false;
+            }
+
+            return acceptedAnswers.some((answer) => {
+                const normalizedAnswer = normalizeValue(answer);
+
+                if (!normalizedAnswer) {
+                    return false;
+                }
+
+                if (normalizedTranscript === normalizedAnswer) {
+                    return true;
+                }
+
+                if (normalizedTranscript.includes(normalizedAnswer) || normalizedAnswer.includes(normalizedTranscript)) {
+                    return true;
+                }
+
+                const longestLength = Math.max(normalizedTranscript.length, normalizedAnswer.length);
+                if (!longestLength) {
+                    return false;
+                }
+
+                const distance = getLevenshteinDistance(normalizedTranscript, normalizedAnswer);
+                const similarity = 1 - (distance / longestLength);
+
+                return similarity >= 0.8;
+            });
+        }
+
+        function updatePronunciationUiState() {
+            const transcriptText = document.getElementById('pronunciation-transcript');
+            const statusText = document.getElementById('pronunciation-status');
+            const listenBtn = document.getElementById('listen-button');
+            const checkBtn = document.getElementById('check-button');
+            const transcriptCard = document.getElementById('pronunciation-transcript-card');
+
+            if (!transcriptText || !statusText || !listenBtn || !checkBtn || !transcriptCard) {
+                return;
+            }
+
+            transcriptText.textContent = pronunciationTranscript || 'Your recognized speech will appear here.';
+            transcriptText.style.color = pronunciationTranscript ? '#FFFFFF' : '#8A8A8A';
+            listenBtn.textContent = isListeningForPronunciation ? 'LISTENING...' : 'START RECORDING';
+
+            statusText.textContent = pronunciationError || '';
+            statusText.style.color = '#FCA5A5';
+            transcriptCard.style.boxShadow = '';
+            transcriptCard.style.borderColor = '#3A3A3A';
+
+            if (pronunciationCheckResult?.isCorrect) {
+                statusText.textContent = 'Correct pronunciation. Great job!';
+                statusText.style.color = '#86EFAC';
+                transcriptCard.style.borderColor = '#10B981';
+                transcriptCard.style.boxShadow = '0 0 0 3px rgba(16,185,129,0.2)';
+            } else if (pronunciationCheckResult && !pronunciationCheckResult.isCorrect) {
+                statusText.textContent = `Not quite. Expected: ${pronunciationCheckResult.expected}`;
+                statusText.style.color = '#FCA5A5';
+                transcriptCard.style.borderColor = '#EF4444';
+                transcriptCard.style.boxShadow = '0 0 0 3px rgba(239,68,68,0.18)';
+            } else if (!PronunciationChecker.isSupported()) {
+                statusText.textContent = 'Speech recognition is not supported on this device/browser.';
+                statusText.style.color = '#FBBF24';
+            }
+
+            checkBtn.disabled = !pronunciationTranscript || isListeningForPronunciation;
+            checkBtn.style.opacity = checkBtn.disabled ? '0.5' : '1';
+        }
+
+        async function startPronunciationListening(question) {
+            pronunciationTranscript = '';
+            pronunciationError = '';
+            pronunciationCheckResult = null;
+
+            updatePronunciationUiState();
+
+            try {
+                await MicrophoneAccess.ensurePermission();
+            } catch (error) {
+                pronunciationError = error?.message || 'Microphone permission is required.';
+                updatePronunciationUiState();
+                return;
+            }
+
+            PronunciationChecker.startListening({
+                lang: question.recognitionLang || 'fil-PH',
+                onStart: () => {
+                    isListeningForPronunciation = true;
+                    updatePronunciationUiState();
+                },
+                onResult: (transcript) => {
+                    pronunciationTranscript = transcript;
+                    pronunciationError = '';
+                    updatePronunciationUiState();
+                },
+                onError: (errorMessage) => {
+                    pronunciationError = errorMessage;
+                    updatePronunciationUiState();
+                },
+                onEnd: () => {
+                    isListeningForPronunciation = false;
+                    updatePronunciationUiState();
+                }
+            });
         }
 
         function renderQuestion() {
@@ -1987,74 +2292,119 @@
             const questionText = createElement('div', 'text-center mb-8');
             const instruction = createElement('p', 'text-[#BEBEBE] mb-4');
             instruction.style.fontSize = isMobile ? '14px' : '16px';
-            instruction.textContent = shouldShowQuestionImage ? 'What is shown in this image?' : 'What does this mean?';
+            const isPronunciationQuestion = isPronunciationQuestionData(currentQuestion);
+            const pronunciationPrompt = getPronunciationPrompt(currentQuestion);
+            const pronunciationTarget = getPronunciationTarget(currentQuestion);
+            const pronunciationGuide = getPronunciationGuide(currentQuestion);
+            instruction.textContent = isPronunciationQuestion
+                ? 'Listen to the pronunciation, then say the Bisaya word.'
+                : (shouldShowQuestionImage ? 'What is shown in this image?' : 'What does this mean?');
 
             const cebuanoWord = createElement('h1', 'text-white');
             cebuanoWord.style.fontSize = isMobile ? '32px' : '48px';
             cebuanoWord.style.fontWeight = '700';
-            cebuanoWord.textContent = currentQuestion.question;
+            cebuanoWord.textContent = isPronunciationQuestion ? pronunciationPrompt : currentQuestion.question;
 
             questionText.appendChild(instruction);
+
+            if (isPronunciationQuestion && pronunciationGuide) {
+                const promptText = createElement('p', 'text-[#6BB6FF] mb-3');
+                promptText.style.fontSize = isMobile ? '18px' : '20px';
+                promptText.style.fontWeight = '600';
+                promptText.textContent = pronunciationGuide;
+                questionText.appendChild(promptText);
+            }
+
             questionText.appendChild(cebuanoWord);
+
+            if (isPronunciationQuestion) {
+                const speakerBtn = createElement('button', 'btn-icon mt-4');
+                speakerBtn.innerHTML = '<i data-lucide="volume-2" style="width: 24px; height: 24px; color: #6BB6FF;"></i>';
+                speakerBtn.onclick = () => TTS.speak(pronunciationTarget, 'fil-PH');
+                questionText.appendChild(speakerBtn);
+            }
+
             content.appendChild(questionText);
 
-            // Options grid
-            const optionsGrid = createElement('div', `grid ${isMobile ? 'grid-2' : 'grid-2'} gap-4 flex-1 max-w-3xl mx-auto w-full`);
+            resetPronunciationState();
 
-            // question.options.forEach((option, index) => {
-            //     const optionCard = createElement('div', 'image-card transition-all cursor-pointer');
-            //     optionCard.style.height = isMobile ? '140px' : '180px';
-            //     optionCard.style.backgroundColor = '#2A2A2A';
-            //     optionCard.style.display = 'flex';
-            //     optionCard.style.flexDirection = 'column';
-            //     optionCard.style.alignItems = 'center';
-            //     optionCard.style.justifyContent = 'center';
-            //     optionCard.style.padding = '1rem';
+            if (isPronunciationQuestion) {
+                const pronunciationPanel = createElement('div', 'flex-1 max-w-3xl mx-auto w-full');
 
-            //     // Placeholder for image
-            //     const imagePlaceholder = createElement('div', 'mb-3');
-            //     imagePlaceholder.style.fontSize = '48px';
-            //     imagePlaceholder.textContent = '\uD83D\uDDBC\uFE0F';
+                const transcriptCard = createElement('div', 'card p-6');
+                transcriptCard.id = 'pronunciation-transcript-card';
+                transcriptCard.style.backgroundColor = '#2A2A2A';
+                transcriptCard.style.border = '1px solid #3A3A3A';
+                transcriptCard.style.borderRadius = '20px';
+                transcriptCard.style.minHeight = isMobile ? '150px' : '170px';
 
-            //     const label = createElement('p', 'text-white text-center');
-            //     label.style.fontSize = isMobile ? '14px' : '16px';
-            //     label.textContent = option.text;
+                const transcriptLabel = createElement('p', 'text-[#BEBEBE] mb-3');
+                transcriptLabel.style.fontSize = '14px';
+                transcriptLabel.textContent = 'Recognized speech';
 
-            //     optionCard.appendChild(imagePlaceholder);
-            //     optionCard.appendChild(label);
+                const transcriptText = createElement('p', '');
+                transcriptText.id = 'pronunciation-transcript';
+                transcriptText.style.fontSize = isMobile ? '18px' : '20px';
+                transcriptText.style.lineHeight = '1.5';
 
-            //     optionCard.onclick = () => selectAnswer(index, optionCard);
-            //     optionsGrid.appendChild(optionCard);
-            // });
+                const statusText = createElement('p', 'mt-4');
+                statusText.id = 'pronunciation-status';
+                statusText.style.minHeight = '24px';
+                statusText.style.fontSize = '14px';
 
-            currentQuestion.choices.forEach((choice, index) => {
-                const optionCard = createElement('div', 'image-card transition-all cursor-pointer');
-                optionCard.style.height = isMobile ? '120px' : '150px';
-                optionCard.style.backgroundColor = '#2A2A2A';
-                optionCard.style.display = 'flex';
-                optionCard.style.alignItems = 'center';
-                optionCard.style.justifyContent = 'center';
-                optionCard.style.padding = '1rem';
+                transcriptCard.appendChild(transcriptLabel);
+                transcriptCard.appendChild(transcriptText);
+                transcriptCard.appendChild(statusText);
+                pronunciationPanel.appendChild(transcriptCard);
+                content.appendChild(pronunciationPanel);
+            } else {
+                const optionsGrid = createElement('div', `grid ${isMobile ? 'grid-2' : 'grid-2'} gap-4 flex-1 max-w-3xl mx-auto w-full`);
 
-                const label = createElement('p', 'text-white text-center');
-                label.style.fontSize = isMobile ? '14px' : '16px';
-                label.textContent = choice;
+                currentQuestion.choices.forEach((choice, index) => {
+                    const optionCard = createElement('div', 'image-card transition-all cursor-pointer');
+                    optionCard.style.height = isMobile ? '120px' : '150px';
+                    optionCard.style.backgroundColor = '#2A2A2A';
+                    optionCard.style.display = 'flex';
+                    optionCard.style.alignItems = 'center';
+                    optionCard.style.justifyContent = 'center';
+                    optionCard.style.padding = '1rem';
 
-                optionCard.appendChild(label);
-                optionCard.onclick = () => selectAnswer(index, optionCard);
+                    const label = createElement('p', 'text-white text-center');
+                    label.style.fontSize = isMobile ? '14px' : '16px';
+                    label.textContent = choice;
 
-                optionsGrid.appendChild(optionCard);
-            });
+                    optionCard.appendChild(label);
+                    optionCard.onclick = () => selectAnswer(index, optionCard);
 
-            content.appendChild(optionsGrid);
+                    optionsGrid.appendChild(optionCard);
+                });
+
+                content.appendChild(optionsGrid);
+            }
 
             // Check button
             const buttonContainer = createElement('div', `w-full max-w-3xl mx-auto mt-6`);
+            buttonContainer.style.display = 'flex';
+            buttonContainer.style.flexDirection = isPronunciationQuestion ? (isMobile ? 'column' : 'row') : 'column';
+            buttonContainer.style.gap = '12px';
+
+            if (isPronunciationQuestion) {
+                const listenBtn = createButton('START RECORDING', () => startPronunciationListening(currentQuestion), 'secondary', !isMobile);
+                listenBtn.id = 'listen-button';
+                listenBtn.style.height = isMobile ? '56px' : '64px';
+                buttonContainer.appendChild(listenBtn);
+            }
+
             const checkBtn = createButton('CHECK', checkAnswer, 'primary', true);
             checkBtn.id = 'check-button';
             checkBtn.style.height = isMobile ? '56px' : '64px';
-            checkBtn.disabled = true;
-            checkBtn.style.opacity = '0.5';
+            if (isPronunciationQuestion) {
+                checkBtn.disabled = true;
+                checkBtn.style.opacity = '0.5';
+            } else {
+                checkBtn.disabled = true;
+                checkBtn.style.opacity = '0.5';
+            }
             buttonContainer.appendChild(checkBtn);
             content.appendChild(buttonContainer);
 
@@ -2063,6 +2413,10 @@
 
             if (typeof lucide !== 'undefined') {
                 lucide.createIcons();
+            }
+
+            if (isPronunciationQuestion) {
+                updatePronunciationUiState();
             }
         }
 
@@ -2086,6 +2440,43 @@
 
         function checkAnswer() {
             const currentQuestion = questions[currentQuestionIndex];
+            const isPronunciationQuestion = isPronunciationQuestionData(currentQuestion);
+
+            if (isPronunciationQuestion) {
+                const acceptedAnswers = getAcceptedPronunciationAnswers(currentQuestion);
+                const expectedAnswer = acceptedAnswers[0] || getPronunciationTarget(currentQuestion);
+                const isCorrect = isPronunciationMatch(pronunciationTranscript, acceptedAnswers);
+                pronunciationCheckResult = {
+                    isCorrect,
+                    expected: expectedAnswer
+                };
+                updatePronunciationUiState();
+
+                const checkBtn = document.getElementById('check-button');
+                if (checkBtn) {
+                    checkBtn.disabled = true;
+                    checkBtn.style.opacity = '0.5';
+                }
+
+                if (isCorrect) {
+                    SoundEffects.playCorrect();
+                    score++;
+                } else {
+                    SoundEffects.playIncorrect();
+                }
+
+                setTimeout(() => {
+                    if (currentQuestionIndex < questions.length - 1) {
+                        currentQuestionIndex++;
+                        renderQuestion();
+                    } else {
+                        navigateTo('lesson-complete');
+                    }
+                }, isCorrect ? 1500 : 2200);
+
+                return;
+            }
+
             const selectedChoice = currentQuestion.choices[selectedAnswer];
             const isCorrect = selectedChoice === currentQuestion.answer;
             const correctIndex = currentQuestion.choices.indexOf(currentQuestion.answer);
