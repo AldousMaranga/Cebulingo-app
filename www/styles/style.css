@@ -471,6 +471,31 @@ body {
     box-shadow: 0 0 0 4px #EF4444;
 }
 
+.lesson-coach-card {
+    width: 100%;
+    border: 1px solid rgba(107, 182, 255, 0.28);
+    border-radius: 18px;
+    padding: 0.9rem 1rem;
+    background: rgba(34, 34, 34, 0.92);
+}
+
+.lesson-coach-card p {
+    margin: 0;
+}
+
+#lesson-coach-title {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 0.4rem;
+}
+
+#lesson-coach-text {
+    font-size: 14px;
+    line-height: 1.5;
+}
+
 /* Sparkle Effect */
 .sparkle {
     position: absolute;

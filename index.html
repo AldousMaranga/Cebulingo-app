@@ -36,6 +36,7 @@
         const USER_PROFILE_COLLECTION = 'users';
         const USER_ACCOUNT_COLLECTION = 'user_accounts';
         const LEADERBOARD_COLLECTION = 'leaderboard';
+        window.CEBULINGO_AI_RECOMMENDER_URL = 'https://cebulingo-admin.vercel.app/api/recommendation';
 
     </script>
 
@@ -2392,6 +2393,10 @@
         let spellingCheckResult = null;
         let currentPronunciationMode = 'word';
         let currentTypingMode = 'word';
+        let lessonCoachFeedback = null;
+        let currentQuestionAttemptCount = 0;
+        let coachRequestToken = 0;
+        const MAX_QUESTION_ATTEMPTS = 3;
 
         function getSelectedLesson() {
             if (!AppState.selectedLessonId) {
@@ -2428,6 +2433,7 @@
             currentQuestionIndex = 0;
             score = 0;
             selectedAnswer = null;
+            currentQuestionAttemptCount = 0;
             AppState.lessonData.totalQuestions = questions.length;
             AppState.lessonData.currentScore = 0;
             AppState.lessonData.wrongQuestions = [];
@@ -2449,12 +2455,99 @@
             pronunciationError = '';
             pronunciationCheckResult = null;
             isListeningForPronunciation = false;
+            lessonCoachFeedback = null;
             PronunciationChecker.stopListening();
         }
 
         function resetSpellingState() {
             spellingAnswer = '';
             spellingCheckResult = null;
+            lessonCoachFeedback = null;
+        }
+
+        function getRemainingAttempts() {
+            return Math.max(0, MAX_QUESTION_ATTEMPTS - currentQuestionAttemptCount);
+        }
+
+        function getAttemptMessagePrefix() {
+            const remainingAttempts = getRemainingAttempts();
+
+            if (remainingAttempts <= 0) {
+                return 'No tries left after this attempt.';
+            }
+
+            if (remainingAttempts === 1) {
+                return '1 try left.';
+            }
+
+            return `${remainingAttempts} tries left.`;
+        }
+
+        function updateAttemptIndicator() {
+            const attemptText = document.getElementById('question-attempt-indicator');
+            if (!attemptText) {
+                return;
+            }
+
+            attemptText.textContent = `Attempts: ${Math.min(currentQuestionAttemptCount + 1, MAX_QUESTION_ATTEMPTS)} / ${MAX_QUESTION_ATTEMPTS}`;
+        }
+
+        function moveToNextQuestion() {
+            coachRequestToken++;
+            selectedAnswer = null;
+            currentQuestionAttemptCount = 0;
+
+            if (currentQuestionIndex < questions.length - 1) {
+                currentQuestionIndex++;
+                renderQuestion();
+            } else {
+                navigateTo('lesson-complete');
+            }
+        }
+
+        function registerQuestionMiss(question, details = {}) {
+            const wrongQuestions = Array.isArray(AppState.lessonData.wrongQuestions)
+                ? AppState.lessonData.wrongQuestions
+                : [];
+
+            wrongQuestions.push({
+                question: question?.question || '',
+                answer: question?.answer || '',
+                attempts: currentQuestionAttemptCount,
+                ...details
+            });
+
+            AppState.lessonData.wrongQuestions = wrongQuestions;
+        }
+
+        function handleCorrectAttempt() {
+            SoundEffects.playCorrect();
+            score++;
+
+            setTimeout(() => {
+                moveToNextQuestion();
+            }, 1500);
+        }
+
+        function handleIncorrectAttempt(question, details = {}, options = {}) {
+            const {
+                onRetry = () => { },
+                finalDelay = 2200
+            } = options;
+
+            SoundEffects.playIncorrect();
+
+            if (currentQuestionAttemptCount >= MAX_QUESTION_ATTEMPTS) {
+                registerQuestionMiss(question, details);
+                setTimeout(() => {
+                    moveToNextQuestion();
+                }, finalDelay);
+                return;
+            }
+
+            setTimeout(() => {
+                onRetry();
+            }, 900);
         }
 
         function getPronunciationPrompt(question) {
@@ -2471,6 +2564,451 @@
 
         function getQuestionAudioSource(question) {
             return question?.audioUrl || question?.audioURL || question?.audio || '';
+        }
+
+        const AIRecommendationService = {
+            hasEndpoint() {
+                return Boolean(this.getEndpoint());
+            },
+            getEndpoint() {
+                const runtimeEndpoint = typeof window !== 'undefined' && typeof window.CEBULINGO_AI_RECOMMENDER_URL === 'string'
+                    ? window.CEBULINGO_AI_RECOMMENDER_URL
+                    : '';
+                const savedEndpoint = Storage.load('aiRecommendationEndpoint');
+                return ((savedEndpoint || runtimeEndpoint || '') + '').trim();
+            },
+            setEndpoint(url = '') {
+                const normalizedUrl = (url || '').toString().trim();
+                if (!normalizedUrl) {
+                    Storage.clear('aiRecommendationEndpoint');
+                    return;
+                }
+
+                Storage.save('aiRecommendationEndpoint', normalizedUrl);
+            },
+            async generate(context) {
+                const endpoint = this.getEndpoint();
+                if (!endpoint) {
+                    return null;
+                }
+
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+                try {
+                    const response = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(context),
+                        signal: controller.signal
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Recommendation endpoint returned ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    if (!data || typeof data.message !== 'string' || !data.message.trim()) {
+                        return null;
+                    }
+
+                    return {
+                        message: data.message.trim(),
+                        tone: data.tone || (context.isCorrect ? 'success' : 'warning')
+                    };
+                } catch (error) {
+                    console.warn('AI recommendation fallback in use.', error);
+                    return null;
+                } finally {
+                    clearTimeout(timeoutId);
+                }
+            }
+        };
+
+        if (typeof window !== 'undefined') {
+            window.CebuLingoAI = {
+                setRecommendationEndpoint(url) {
+                    AIRecommendationService.setEndpoint(url);
+                },
+                getRecommendationEndpoint() {
+                    return AIRecommendationService.getEndpoint();
+                }
+            };
+        }
+
+        function setLessonCoachFeedback(message = '', tone = 'info') {
+            lessonCoachFeedback = message ? { message, tone } : null;
+
+            const card = document.getElementById('lesson-coach-card');
+            const title = document.getElementById('lesson-coach-title');
+            const text = document.getElementById('lesson-coach-text');
+
+            if (!card || !title || !text) {
+                return;
+            }
+
+            if (!message) {
+                card.style.display = 'none';
+                text.textContent = '';
+                return;
+            }
+
+            const palette = {
+                info: {
+                    border: 'rgba(107,182,255,0.28)',
+                    background: 'rgba(34,34,34,0.92)',
+                    shadow: '0 10px 24px rgba(0,0,0,0.18)',
+                    title: '#6BB6FF',
+                    text: '#E6F0FF'
+                },
+                success: {
+                    border: 'rgba(16,185,129,0.34)',
+                    background: 'rgba(22,38,31,0.96)',
+                    shadow: '0 10px 24px rgba(16,185,129,0.14)',
+                    title: '#86EFAC',
+                    text: '#ECFDF5'
+                },
+                warning: {
+                    border: 'rgba(251,191,36,0.34)',
+                    background: 'rgba(46,39,22,0.96)',
+                    shadow: '0 10px 24px rgba(251,191,36,0.12)',
+                    title: '#FCD34D',
+                    text: '#FEF3C7'
+                },
+                error: {
+                    border: 'rgba(239,68,68,0.34)',
+                    background: 'rgba(49,28,28,0.96)',
+                    shadow: '0 10px 24px rgba(239,68,68,0.12)',
+                    title: '#FCA5A5',
+                    text: '#FDECEC'
+                }
+            };
+
+            const activePalette = palette[tone] || palette.info;
+
+            card.style.display = 'block';
+            card.style.borderColor = activePalette.border;
+            card.style.background = activePalette.background;
+            card.style.boxShadow = activePalette.shadow;
+            title.style.color = activePalette.title;
+            text.style.color = activePalette.text;
+            text.textContent = message;
+        }
+
+        function buildAiRecommendationContext({
+            question,
+            isCorrect,
+            selectedChoice = '',
+            correctAnswer = '',
+            expectedAnswer = '',
+            userResponse = '',
+            isPronunciationQuestion = false,
+            isSpellingQuestion = false,
+            isPhraseTypingQuestion = false,
+            isPhrasePronunciationQuestion = false
+        }) {
+            return {
+                questionText: question?.question || '',
+                promptText: question?.prompt || '',
+                correctAnswer: correctAnswer || expectedAnswer || '',
+                userAnswer: selectedChoice || userResponse || '',
+                choices: Array.isArray(question?.choices) ? question.choices : [],
+                isCorrect,
+                attemptsUsed: currentQuestionAttemptCount,
+                attemptsRemaining: getRemainingAttempts(),
+                revealAnswer: getRemainingAttempts() === 0,
+                difficulty: question?.difficulty || '',
+                lessonType: question?.lessonType || question?.type || '',
+                questionType: isPronunciationQuestion
+                    ? (isPhrasePronunciationQuestion ? 'phrase_pronunciation' : 'pronunciation')
+                    : isSpellingQuestion
+                        ? (isPhraseTypingQuestion ? 'phrase_typing' : 'spelling')
+                        : 'multiple_choice',
+                hasImage: Boolean(question?.imageUrl)
+            };
+        }
+
+        async function requestAiCoachFeedback(context, fallbackFeedback) {
+            const requestToken = ++coachRequestToken;
+            const questionIndexAtRequest = currentQuestionIndex;
+            const shouldShowThinkingState = AIRecommendationService.hasEndpoint() && !context.isCorrect;
+
+            if (shouldShowThinkingState) {
+                setLessonCoachFeedback('Thinking of a clue for you...', 'info');
+            }
+
+            const aiFeedback = await AIRecommendationService.generate(context);
+
+            if (!aiFeedback) {
+                if (requestToken === coachRequestToken && questionIndexAtRequest === currentQuestionIndex) {
+                    setLessonCoachFeedback(fallbackFeedback.message, fallbackFeedback.tone);
+                }
+                return fallbackFeedback;
+            }
+
+            if (requestToken !== coachRequestToken || questionIndexAtRequest !== currentQuestionIndex) {
+                return fallbackFeedback;
+            }
+
+            setLessonCoachFeedback(aiFeedback.message, aiFeedback.tone);
+            return aiFeedback;
+        }
+
+        function getQuestionPromptLabel(question, { isPronunciationQuestion = false, isSpellingQuestion = false } = {}) {
+            if (isPronunciationQuestion || isSpellingQuestion) {
+                return getPronunciationPrompt(question) || 'this word';
+            }
+
+            return question?.question || 'this clue';
+        }
+
+        function getAnswerDisplayText(value, fallback = 'the correct answer') {
+            const text = (value || '').toString().trim();
+            return text || fallback;
+        }
+
+        function getCoachVariant(question, variants, salt = '') {
+            if (!Array.isArray(variants) || !variants.length) {
+                return '';
+            }
+
+            const source = `${question?.question || ''}|${question?.answer || ''}|${question?.difficulty || ''}|${question?.lessonType || ''}|${currentQuestionIndex}|${salt}`;
+            let hash = 0;
+
+            for (let index = 0; index < source.length; index++) {
+                hash = ((hash << 5) - hash) + source.charCodeAt(index);
+                hash |= 0;
+            }
+
+            return variants[Math.abs(hash) % variants.length];
+        }
+
+        function getWordCountHint(text, label = 'answer') {
+            const count = (text || '').toString().trim().split(/\s+/).filter(Boolean).length;
+            if (!count) {
+                return '';
+            }
+
+            return count === 1
+                ? `The ${label} is a single word.`
+                : `The ${label} has ${count} words.`;
+        }
+
+        function getApproxSyllableHint(text) {
+            const normalized = (text || '').toString().toLowerCase().replace(/[^a-z]/g, '');
+            if (!normalized) {
+                return '';
+            }
+
+            const groups = normalized.match(/[aeiou]+/g);
+            const syllables = Math.max(1, groups ? groups.length : 1);
+
+            return syllables === 1
+                ? 'Listen for one clear beat in the word.'
+                : `Listen for about ${syllables} beats as you say it.`;
+        }
+
+        function getSpellingShapeHint(text) {
+            const normalized = (text || '').toString().trim();
+            if (!normalized) {
+                return '';
+            }
+
+            const lettersOnly = normalized.replace(/[^A-Za-z]/g, '');
+            const lengthHint = lettersOnly
+                ? `It has ${lettersOnly.length} letters.`
+                : '';
+            const firstLetter = lettersOnly ? lettersOnly.charAt(0).toUpperCase() : '';
+            const firstLetterHint = firstLetter ? `It starts with ${firstLetter}.` : '';
+
+            return [lengthHint, firstLetterHint].filter(Boolean).join(' ');
+        }
+
+        function buildCoachFeedback({
+            question,
+            isCorrect,
+            selectedChoice = '',
+            correctAnswer = '',
+            expectedAnswer = '',
+            userResponse = '',
+            isPronunciationQuestion = false,
+            isSpellingQuestion = false,
+            isPhraseTypingQuestion = false,
+            isPhrasePronunciationQuestion = false
+        }) {
+            const clueLabel = getQuestionPromptLabel(question, { isPronunciationQuestion, isSpellingQuestion });
+            const correctText = getAnswerDisplayText(correctAnswer || expectedAnswer);
+            const chosenText = getAnswerDisplayText(selectedChoice || userResponse, '');
+            const isImageQuestion = Boolean(question?.imageUrl);
+            const attemptPrefix = getAttemptMessagePrefix();
+            const answerWordCountHint = getWordCountHint(correctText);
+            const pronunciationBeatHint = getApproxSyllableHint(correctText);
+            const spellingShapeHint = getSpellingShapeHint(correctText);
+
+            if (isPronunciationQuestion) {
+                if (isCorrect) {
+                    const successVariants = isPhrasePronunciationQuestion
+                        ? [
+                            'Great job. That phrase sounded solid.',
+                            'Nice work. You delivered the phrase clearly.',
+                            'Well done. That phrase came through nicely.'
+                        ]
+                        : [
+                            'Good job. That pronunciation was on target.',
+                            `Nice work. You said "${correctText}" clearly.`,
+                            'Well done. Your pronunciation matched the target.'
+                        ];
+
+                    return {
+                        tone: 'success',
+                        message: getCoachVariant(question, successVariants, 'pronunciation-success')
+                    };
+                }
+
+                const shouldRevealAnswer = getRemainingAttempts() === 0;
+                const warningVariants = isPhrasePronunciationQuestion
+                    ? shouldRevealAnswer
+                        ? [
+                            `Almost there. The target phrase is "${correctText}". No tries left after this attempt, so listen for the full rhythm as you move on.`,
+                            `Good effort. The phrase to remember is "${correctText}". No tries left after this attempt, so keep its key words in mind.`,
+                            `Last try on this one. The phrase was "${correctText}". Notice the pacing and word order for next time.`
+                        ]
+                        : [
+                            `Almost there. ${attemptPrefix} Say it a little slower and focus on the key words before your next try.`,
+                            `Close try. ${attemptPrefix} Keep the rhythm steady and stress the important words more clearly.`,
+                            `Not quite yet. ${attemptPrefix} Try again with a slower pace and cleaner phrase timing.`
+                        ]
+                    : shouldRevealAnswer
+                        ? [
+                            `Almost there. The target word was "${correctText}". No tries left after this attempt, so listen for each syllable as you move on.`,
+                            `Good effort. The pronunciation to remember is "${correctText}". No tries left after this attempt, so keep its sound pattern in mind.`,
+                            `Last try on this one. The word was "${correctText}". Notice the syllables and pacing for next time.`
+                        ]
+                        : [
+                            `Almost there. ${attemptPrefix} Slow down, listen again, and focus on each syllable before repeating it. ${pronunciationBeatHint}`,
+                            `Close try. ${attemptPrefix} Try saying it more clearly one sound at a time. ${pronunciationBeatHint}`,
+                            `Not quite yet. ${attemptPrefix} Repeat it slowly and keep the middle sounds crisp. ${pronunciationBeatHint}`
+                        ];
+
+                return {
+                    tone: 'warning',
+                    message: getCoachVariant(question, warningVariants, 'pronunciation-warning')
+                };
+            }
+
+            if (isSpellingQuestion) {
+                if (isCorrect) {
+                    const successVariants = isPhraseTypingQuestion
+                        ? [
+                            'Good job. That phrase fits perfectly.',
+                            'Nice work. You got the phrase right.',
+                            'Well done. That phrase answer is correct.'
+                        ]
+                        : [
+                            'Good job. That spelling is correct.',
+                            `Nice work. You spelled "${correctText}" right.`,
+                            'Well done. Your spelling matches the target.'
+                        ];
+
+                    return {
+                        tone: 'success',
+                        message: getCoachVariant(question, successVariants, 'spelling-success')
+                    };
+                }
+
+                const comparisonText = chosenText
+                    ? ` You entered "${chosenText}", so focus on the letters that differ.`
+                    : '';
+                const shouldRevealAnswer = getRemainingAttempts() === 0;
+
+                const warningVariants = isPhraseTypingQuestion
+                    ? shouldRevealAnswer
+                        ? [
+                            `Not quite. The phrase to remember is "${correctText}".${comparisonText} No tries left after this attempt, so notice the word order as you move on.`,
+                            `Good effort. The correct phrase was "${correctText}".${comparisonText} Keep its structure in mind for next time.`,
+                            `Last try on this one. The phrase was "${correctText}".${comparisonText} Watch how the clue maps to each word.`
+                        ]
+                        : [
+                            `Not quite.${comparisonText} ${attemptPrefix} Use the clue and word order as your guide on the next try. ${answerWordCountHint}`,
+                            `Close.${comparisonText} ${attemptPrefix} Rebuild the phrase from the clue one part at a time. ${answerWordCountHint}`,
+                            `Almost there.${comparisonText} ${attemptPrefix} Check the word order before you submit again. ${answerWordCountHint}`
+                        ]
+                    : shouldRevealAnswer
+                        ? [
+                            `Not quite. The correct spelling is "${correctText}".${comparisonText} No tries left after this attempt, so study the letter pattern for next time.`,
+                            `Good effort. The spelling to remember is "${correctText}".${comparisonText} Notice which letters changed.`,
+                            `Last try on this one. The word was spelled "${correctText}".${comparisonText} Keep that spelling pattern in mind.`
+                        ]
+                        : [
+                            `Not quite.${comparisonText} ${attemptPrefix} Break the word into smaller sounds before typing again. ${spellingShapeHint}`,
+                            `Close.${comparisonText} ${attemptPrefix} Try typing it slowly syllable by syllable. ${spellingShapeHint}`,
+                            `Almost there.${comparisonText} ${attemptPrefix} Watch the letters that change near the end. ${spellingShapeHint}`
+                        ];
+
+                return {
+                    tone: 'warning',
+                    message: getCoachVariant(question, warningVariants, 'spelling-warning')
+                };
+            }
+
+            if (isCorrect) {
+                const successVariants = isImageQuestion
+                    ? [
+                        'Good job. You matched the image correctly.',
+                        'Nice work. That picture-answer pair is right.',
+                        'Well done. You picked the correct word for the image.'
+                    ]
+                    : [
+                        'Good job. That answer is correct.',
+                        'Nice work. You matched the clue correctly.',
+                        'Well done. You chose the right answer.'
+                    ];
+
+                return {
+                    tone: 'success',
+                    message: getCoachVariant(question, successVariants, 'choice-success')
+                };
+            }
+
+            const shouldRevealAnswer = getRemainingAttempts() === 0;
+            const contrastText = chosenText
+                ? shouldRevealAnswer
+                    ? `"${chosenText}" was close in theme, but "${correctText}" was the best match.`
+                    : `"${chosenText}" seems close, but look more carefully at the clue or image.`
+                : shouldRevealAnswer
+                    ? `The correct answer was "${correctText}".`
+                    : `Use the clue more carefully before your next try.`;
+
+            const warningVariants = isImageQuestion
+                ? shouldRevealAnswer
+                    ? [
+                        `Not quite. The correct answer was "${correctText}". ${contrastText}`,
+                        `Good effort. This image matched "${correctText}". ${contrastText}`,
+                        `Last try on this one. "${correctText}" was the best match for the picture. ${contrastText}`
+                    ]
+                    : [
+                        `Almost there. ${attemptPrefix} Look again at the image details before your next try. Focus on size, shape, and the most obvious feature.`,
+                        `Close. ${attemptPrefix} Focus on the animal or object in the picture more carefully before choosing again.`,
+                        `Not quite yet. ${attemptPrefix} Compare the visible features in the picture with each option one more time.`
+                    ]
+                : shouldRevealAnswer
+                    ? [
+                        `Not quite. For "${clueLabel}", the correct answer was "${correctText}". ${contrastText}`,
+                        `Good effort. "${correctText}" was the best answer for "${clueLabel}". ${contrastText}`,
+                        `Last try on this one. "${correctText}" fit "${clueLabel}" best. ${contrastText}`
+                    ]
+                    : [
+                        `Almost there. ${attemptPrefix} Read the clue once more and compare the choices carefully for exact meaning.`,
+                        `Close. ${attemptPrefix} Use the clue wording more carefully and watch for small meaning differences.`,
+                        `Not quite yet. ${attemptPrefix} Look for the choice that matches the clue most exactly, not just the same category.`
+                    ];
+
+            return {
+                tone: 'warning',
+                message: getCoachVariant(question, warningVariants, 'choice-warning')
+            };
         }
 
         function parseAcceptedAnswers(value) {
@@ -2920,6 +3458,14 @@
 
             questionText.appendChild(instruction);
 
+            const attemptText = createElement('p', 'mb-3');
+            attemptText.id = 'question-attempt-indicator';
+            attemptText.style.fontSize = isMobile ? '12px' : '13px';
+            attemptText.style.color = '#8AB4FF';
+            attemptText.style.fontWeight = '600';
+            attemptText.textContent = `Attempts: ${Math.min(currentQuestionAttemptCount + 1, MAX_QUESTION_ATTEMPTS)} / ${MAX_QUESTION_ATTEMPTS}`;
+            questionText.appendChild(attemptText);
+
             if ((isPronunciationQuestion || isSpellingQuestion) && !isPhraseTypingQuestion && !isPhrasePronunciationQuestion && pronunciationGuide) {
                 const promptText = createElement('p', 'text-[#6BB6FF] mb-3');
                 promptText.style.fontSize = isMobile ? '18px' : '20px';
@@ -3071,6 +3617,21 @@
             buttonContainer.style.flexDirection = isPronunciationQuestion ? (isMobile ? 'column' : 'row') : 'column';
             buttonContainer.style.gap = '12px';
 
+            const coachCard = createElement('div', 'lesson-coach-card');
+            coachCard.id = 'lesson-coach-card';
+            coachCard.style.display = 'none';
+
+            const coachTitle = createElement('p', '');
+            coachTitle.id = 'lesson-coach-title';
+            coachTitle.textContent = 'CebuCoach Tip';
+
+            const coachText = createElement('p', '');
+            coachText.id = 'lesson-coach-text';
+
+            coachCard.appendChild(coachTitle);
+            coachCard.appendChild(coachText);
+            buttonContainer.appendChild(coachCard);
+
             if (isPronunciationQuestion) {
                 const listenBtn = createButton(
                     isPhrasePronunciationQuestion ? 'START SPEAKING' : 'START RECORDING',
@@ -3109,6 +3670,10 @@
                 updateSpellingUiState();
                 document.getElementById('spelling-answer-input')?.focus();
             }
+
+            if (!lessonCoachFeedback) {
+                setLessonCoachFeedback();
+            }
         }
 
         function selectAnswer(index, card) {
@@ -3136,6 +3701,7 @@
             const isSpellingQuestion = isSpellingQuestionData(currentQuestion, selectedLesson);
             const isPhraseTypingQuestion = isPhraseTypingQuestionData(currentQuestion, selectedLesson);
             const isPhrasePronunciationQuestion = isPhrasePronunciationQuestionData(currentQuestion, selectedLesson);
+            currentQuestionAttemptCount++;
 
             if (isPronunciationQuestion) {
                 const acceptedAnswers = getAcceptedPronunciationAnswers(currentQuestion);
@@ -3147,6 +3713,26 @@
                     isCorrect,
                     expected: expectedAnswer
                 };
+                const recommendation = buildCoachFeedback({
+                    question: currentQuestion,
+                    isCorrect,
+                    expectedAnswer,
+                    userResponse: pronunciationTranscript,
+                    isPronunciationQuestion: true,
+                    isPhrasePronunciationQuestion
+                });
+                setLessonCoachFeedback(recommendation.message, recommendation.tone);
+                requestAiCoachFeedback(
+                    buildAiRecommendationContext({
+                        question: currentQuestion,
+                        isCorrect,
+                        expectedAnswer,
+                        userResponse: pronunciationTranscript,
+                        isPronunciationQuestion: true,
+                        isPhrasePronunciationQuestion
+                    }),
+                    recommendation
+                );
                 updatePronunciationUiState();
 
                 const checkBtn = document.getElementById('check-button');
@@ -3156,20 +3742,26 @@
                 }
 
                 if (isCorrect) {
-                    SoundEffects.playCorrect();
-                    score++;
+                    handleCorrectAttempt();
                 } else {
-                    SoundEffects.playIncorrect();
+                    handleIncorrectAttempt(
+                        currentQuestion,
+                        {
+                            expected: expectedAnswer,
+                            userResponse: pronunciationTranscript,
+                            type: 'pronunciation'
+                        },
+                        {
+                            onRetry: () => {
+                                pronunciationTranscript = '';
+                                pronunciationCheckResult = null;
+                                updateAttemptIndicator();
+                                updatePronunciationUiState();
+                            },
+                            finalDelay: 2200
+                        }
+                    );
                 }
-
-                setTimeout(() => {
-                    if (currentQuestionIndex < questions.length - 1) {
-                        currentQuestionIndex++;
-                        renderQuestion();
-                    } else {
-                        navigateTo('lesson-complete');
-                    }
-                }, isCorrect ? 1500 : 2200);
 
                 return;
             }
@@ -3184,6 +3776,26 @@
                     isCorrect,
                     expected: expectedAnswer
                 };
+                const recommendation = buildCoachFeedback({
+                    question: currentQuestion,
+                    isCorrect,
+                    expectedAnswer,
+                    userResponse: spellingAnswer,
+                    isSpellingQuestion: true,
+                    isPhraseTypingQuestion
+                });
+                setLessonCoachFeedback(recommendation.message, recommendation.tone);
+                requestAiCoachFeedback(
+                    buildAiRecommendationContext({
+                        question: currentQuestion,
+                        isCorrect,
+                        expectedAnswer,
+                        userResponse: spellingAnswer,
+                        isSpellingQuestion: true,
+                        isPhraseTypingQuestion
+                    }),
+                    recommendation
+                );
                 updateSpellingUiState();
 
                 const checkBtn = document.getElementById('check-button');
@@ -3193,20 +3805,26 @@
                 }
 
                 if (isCorrect) {
-                    SoundEffects.playCorrect();
-                    score++;
+                    handleCorrectAttempt();
                 } else {
-                    SoundEffects.playIncorrect();
+                    handleIncorrectAttempt(
+                        currentQuestion,
+                        {
+                            expected: expectedAnswer,
+                            userResponse: spellingAnswer,
+                            type: isPhraseTypingQuestion ? 'phrase_typing' : 'spelling'
+                        },
+                        {
+                            onRetry: () => {
+                                spellingCheckResult = null;
+                                updateAttemptIndicator();
+                                updateSpellingUiState();
+                                document.getElementById('spelling-answer-input')?.focus();
+                            },
+                            finalDelay: 2200
+                        }
+                    );
                 }
-
-                setTimeout(() => {
-                    if (currentQuestionIndex < questions.length - 1) {
-                        currentQuestionIndex++;
-                        renderQuestion();
-                    } else {
-                        navigateTo('lesson-complete');
-                    }
-                }, isCorrect ? 1500 : 2200);
 
                 return;
             }
@@ -3214,38 +3832,59 @@
             const selectedChoice = currentQuestion.choices[selectedAnswer];
             const isCorrect = selectedChoice === currentQuestion.answer;
             const correctIndex = currentQuestion.choices.indexOf(currentQuestion.answer);
+            const recommendation = buildCoachFeedback({
+                question: currentQuestion,
+                isCorrect,
+                selectedChoice,
+                correctAnswer: currentQuestion.answer
+            });
+            setLessonCoachFeedback(recommendation.message, recommendation.tone);
+            requestAiCoachFeedback(
+                buildAiRecommendationContext({
+                    question: currentQuestion,
+                    isCorrect,
+                    selectedChoice,
+                    correctAnswer: currentQuestion.answer
+                }),
+                recommendation
+            );
 
             // Visual feedback
             const cards = document.querySelectorAll('.image-card');
             if (isCorrect) {
                 cards[selectedAnswer].style.boxShadow = '0 0 0 4px #10B981';
-                SoundEffects.playCorrect();
-                score++;
-
-                setTimeout(() => {
-                    if (currentQuestionIndex < questions.length - 1) {
-                        currentQuestionIndex++;
-                        renderQuestion();
-                    } else {
-                        navigateTo('lesson-complete');
-                    }
-                }, 1500);
+                handleCorrectAttempt();
             } else {
                 cards[selectedAnswer].style.boxShadow = '0 0 0 4px #EF4444';
                 if (correctIndex >= 0 && cards[correctIndex]) {
-                    cards[correctIndex].style.boxShadow = '0 0 0 4px #10B981';
-                }
-                SoundEffects.playIncorrect();
-
-                setTimeout(() => {
-                    // Show correct answer and continue
-                    if (currentQuestionIndex < questions.length - 1) {
-                        currentQuestionIndex++;
-                        renderQuestion();
-                    } else {
-                        navigateTo('lesson-complete');
+                    if (currentQuestionAttemptCount >= MAX_QUESTION_ATTEMPTS) {
+                        cards[correctIndex].style.boxShadow = '0 0 0 4px #10B981';
                     }
-                }, 2000);
+                }
+                handleIncorrectAttempt(
+                    currentQuestion,
+                    {
+                        expected: currentQuestion.answer,
+                        selectedChoice,
+                        type: 'multiple_choice'
+                    },
+                    {
+                        onRetry: () => {
+                            document.querySelectorAll('.image-card').forEach(c => {
+                                c.style.boxShadow = '';
+                                c.classList.remove('selected');
+                            });
+                            selectedAnswer = null;
+                            updateAttemptIndicator();
+                            const retryCheckBtn = document.getElementById('check-button');
+                            if (retryCheckBtn) {
+                                retryCheckBtn.disabled = true;
+                                retryCheckBtn.style.opacity = '0.5';
+                            }
+                        },
+                        finalDelay: 2000
+                    }
+                );
             }
 
             // Disable check button

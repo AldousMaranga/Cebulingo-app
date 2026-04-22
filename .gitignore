@@ -8,3 +8,6 @@ android/build/
 # Optional local editor/system noise
 .DS_Store
 Thumbs.db
+
+# Local secrets
+.env
