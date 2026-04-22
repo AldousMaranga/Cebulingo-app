@@ -915,6 +915,23 @@
             Storage.save('learningPreferences', AppState.learningPreferences);
         }
 
+        function getOrderedProficiencyLevels() {
+            return ['Complete Beginner', 'Intermediate', 'Advanced'];
+        }
+
+        function getRecommendedProficiencyOptions(currentProficiency) {
+            const levels = getOrderedProficiencyLevels();
+            const currentIndex = levels.findIndex(level => normalizeValue(level) === normalizeValue(currentProficiency));
+
+            if (currentIndex === -1) {
+                return levels;
+            }
+
+            return levels.slice(currentIndex, currentIndex + 2).length > 1
+                ? levels.slice(currentIndex, currentIndex + 2)
+                : [levels[currentIndex]];
+        }
+
         function getFilteredLessons() {
             const selectedCategory = normalizeCategory(AppState.learningPreferences.category);
             const selectedDifficulty = getDifficultyForProficiency(AppState.learningPreferences.proficiency);
@@ -1663,6 +1680,9 @@
             const isMobile = AppState.isMobile;
             const filteredLessons = getFilteredLessons();
             const groupedLessons = getGroupedLessonsByPathway(filteredLessons);
+            const completedVisibleLessons = hasCompletedAllVisibleLessons(filteredLessons);
+            const alternativeLessonGroups = completedVisibleLessons ? getAlternativeLessonGroups(groupedLessons) : [];
+            const visiblePerformanceSummary = completedVisibleLessons ? getVisibleLessonPerformanceSummary(filteredLessons) : null;
 
             const screen = createElement('div', 'h-full overflow-y-auto relative');
             screen.style.backgroundColor = '#1C1C1C';
@@ -1689,6 +1709,42 @@
             subtitle.style.fontSize = isMobile ? '14px' : '16px';
             subtitle.textContent = 'Lessons are organized by pathway so the learning path feels clearer and easier to follow.';
             content.appendChild(subtitle);
+
+            if (completedVisibleLessons && alternativeLessonGroups.length) {
+                const suggestionCard = createElement('div', 'mb-8');
+                suggestionCard.id = 'dashboard-path-suggestion-card';
+                suggestionCard.style.cssText = 'display: none; border: 1px solid rgba(107,182,255,0.24); border-radius: 1.6rem; padding: 1.2rem 1.25rem; background: linear-gradient(180deg, rgba(33,41,60,0.96) 0%, rgba(27,34,50,0.96) 100%); box-shadow: 0 18px 40px rgba(16,24,40,0.24);';
+
+                const suggestionEyebrow = createElement('p', 'mb-2');
+                suggestionEyebrow.textContent = 'AI NEXT STEP';
+                suggestionEyebrow.style.cssText = 'font-size: 12px; font-weight: 700; letter-spacing: 0.12em; color: var(--dashboard-suggestion-eyebrow, #8CC8FF);';
+
+                const suggestionText = createElement('p', '');
+                suggestionText.id = 'dashboard-path-suggestion-text';
+                suggestionText.style.cssText = `font-size: ${isMobile ? '14px' : '15px'}; line-height: 1.6; color: #EAF4FF;`;
+
+                const suggestionAction = createButton('GO TO RECOMMENDED PATH', () => {
+                    applyDashboardPathSuggestion(alternativeLessonGroups);
+                }, 'secondary', true);
+                suggestionAction.style.marginTop = '1rem';
+
+                suggestionCard.appendChild(suggestionEyebrow);
+                suggestionCard.appendChild(suggestionText);
+                suggestionCard.appendChild(suggestionAction);
+                content.appendChild(suggestionCard);
+
+                const fallbackSuggestion = buildDashboardPathSuggestionFallback(alternativeLessonGroups, visiblePerformanceSummary || {});
+                if (fallbackSuggestion) {
+                    setDashboardPathSuggestion(fallbackSuggestion.message, fallbackSuggestion.tone, fallbackSuggestion);
+                    requestDashboardPathSuggestion(
+                        buildDashboardPathSuggestionContext(groupedLessons, alternativeLessonGroups, filteredLessons),
+                        fallbackSuggestion
+                    );
+                }
+            } else {
+                dashboardSuggestionRequestToken++;
+                dashboardPathSuggestion = null;
+            }
 
             if (!AppState.lessonList.length) {
                 const emptyText = createElement('p', 'text-[#BEBEBE]');
@@ -2396,6 +2452,8 @@
         let lessonCoachFeedback = null;
         let currentQuestionAttemptCount = 0;
         let coachRequestToken = 0;
+        let dashboardPathSuggestion = null;
+        let dashboardSuggestionRequestToken = 0;
         const MAX_QUESTION_ATTEMPTS = 3;
 
         function getSelectedLesson() {
@@ -2616,7 +2674,11 @@
 
                     return {
                         message: data.message.trim(),
-                        tone: data.tone || (context.isCorrect ? 'success' : 'warning')
+                        tone: data.tone || context.defaultTone || (typeof context.isCorrect === 'boolean'
+                            ? (context.isCorrect ? 'success' : 'warning')
+                            : 'info'),
+                        recommendedPathway: typeof data.recommendedPathway === 'string' ? data.recommendedPathway.trim() : '',
+                        recommendedProficiency: typeof data.recommendedProficiency === 'string' ? data.recommendedProficiency.trim() : ''
                     };
                 } catch (error) {
                     console.warn('AI recommendation fallback in use.', error);
@@ -2754,6 +2816,197 @@
 
             setLessonCoachFeedback(aiFeedback.message, aiFeedback.tone);
             return aiFeedback;
+        }
+
+        function hasCompletedAllVisibleLessons(lessons = []) {
+            return Array.isArray(lessons) && lessons.length > 0 && lessons.every(lesson => isLessonCompleted(lesson));
+        }
+
+        function getAlternativeLessonGroups(visibleGroups = []) {
+            const visiblePathways = new Set((visibleGroups || []).map(group => group.normalizedPathway));
+
+            return getGroupedLessonsByPathway(AppState.lessonList || []).filter(group =>
+                !visiblePathways.has(group.normalizedPathway) &&
+                Array.isArray(group.lessons) &&
+                group.lessons.some(lesson => !isLessonCompleted(lesson))
+            );
+        }
+
+        function getVisibleLessonPerformanceSummary(lessons = []) {
+            const lessonResults = AppState.userData.lessonResults || {};
+            let completedCount = 0;
+            let perfectCount = 0;
+            let totalPercentage = 0;
+
+            (lessons || []).forEach((lesson) => {
+                const completionKey = getLessonCompletionKey(lesson);
+                const result = completionKey ? lessonResults[completionKey] : null;
+                if (!result || !isLessonCompleted(lesson)) {
+                    return;
+                }
+
+                const percentage = Math.max(0, Math.min(100, Number(result.percentage) || 0));
+                completedCount++;
+                totalPercentage += percentage;
+
+                if (percentage === 100) {
+                    perfectCount++;
+                }
+            });
+
+            return {
+                completedCount,
+                perfectCount,
+                averagePercentage: completedCount ? Math.round(totalPercentage / completedCount) : 0
+            };
+        }
+
+        function buildDashboardPathSuggestionFallback(alternativeGroups = [], performanceSummary = {}) {
+            if (!alternativeGroups.length) {
+                return null;
+            }
+
+            const nextGroup = alternativeGroups[0];
+            const starterLesson = nextGroup.lessons.find(lesson => !isLessonCompleted(lesson)) || nextGroup.lessons[0];
+            const starterLessonText = starterLesson?.title ? ` Start with ${starterLesson.title}.` : '';
+            const proficiencyOptions = getRecommendedProficiencyOptions(AppState.learningPreferences.proficiency);
+            const shouldPromoteDifficulty = proficiencyOptions.length > 1 && Number(performanceSummary.averagePercentage || 0) >= 85;
+            const recommendedProficiency = shouldPromoteDifficulty ? proficiencyOptions[1] : (proficiencyOptions[0] || AppState.learningPreferences.proficiency || '');
+            const promotionText = shouldPromoteDifficulty
+                ? ` You look ready to move up to ${recommendedProficiency}.`
+                : '';
+
+            return {
+                message: `You completed this dashboard path. Try ${nextGroup.pathway} next for a different Cebuano context and fresh vocabulary.${promotionText}${starterLessonText}`,
+                tone: 'info',
+                recommendedPathway: nextGroup.pathway,
+                recommendedProficiency
+            };
+        }
+
+        function buildDashboardPathSuggestionContext(visibleGroups, alternativeGroups, filteredLessons) {
+            const performanceSummary = getVisibleLessonPerformanceSummary(filteredLessons);
+            return {
+                task: 'dashboard_pathway_suggestion',
+                currentCategory: AppState.learningPreferences.category || '',
+                currentProficiency: AppState.learningPreferences.proficiency || '',
+                currentDifficulty: getDifficultyForProficiency(AppState.learningPreferences.proficiency) || '',
+                completedLessonsOnDashboard: Array.isArray(filteredLessons) ? filteredLessons.length : 0,
+                completedVisibleLessons: performanceSummary.completedCount,
+                averageVisibleScore: performanceSummary.averagePercentage,
+                perfectVisibleLessons: performanceSummary.perfectCount,
+                completedPathways: (visibleGroups || [])
+                    .filter(group => Array.isArray(group.lessons) && group.lessons.length && group.lessons.every(lesson => isLessonCompleted(lesson)))
+                    .map(group => group.pathway),
+                recommendedProficiencyOptions: getRecommendedProficiencyOptions(AppState.learningPreferences.proficiency),
+                availableAlternativePathways: (alternativeGroups || []).slice(0, 4).map(group => {
+                    const starterLesson = group.lessons.find(lesson => !isLessonCompleted(lesson)) || group.lessons[0] || {};
+                    return {
+                        pathway: group.pathway,
+                        description: getPathwayMeta(group.pathway).description,
+                        starterLessonTitle: starterLesson.title || '',
+                        lessonCount: Array.isArray(group.lessons) ? group.lessons.length : 0
+                    };
+                }),
+                defaultTone: 'info'
+            };
+        }
+
+        function setDashboardPathSuggestion(message = '', tone = 'info', metadata = {}) {
+            dashboardPathSuggestion = message ? { message, tone, ...metadata } : null;
+
+            const card = document.getElementById('dashboard-path-suggestion-card');
+            const text = document.getElementById('dashboard-path-suggestion-text');
+
+            if (!card || !text) {
+                return;
+            }
+
+            if (!message) {
+                card.style.display = 'none';
+                text.textContent = '';
+                return;
+            }
+
+            const palette = {
+                info: {
+                    border: 'rgba(107,182,255,0.26)',
+                    background: 'linear-gradient(180deg, rgba(33,41,60,0.96) 0%, rgba(27,34,50,0.96) 100%)',
+                    shadow: '0 18px 40px rgba(16,24,40,0.24)',
+                    eyebrow: '#8CC8FF',
+                    text: '#EAF4FF'
+                },
+                success: {
+                    border: 'rgba(16,185,129,0.28)',
+                    background: 'linear-gradient(180deg, rgba(19,45,35,0.96) 0%, rgba(18,36,29,0.96) 100%)',
+                    shadow: '0 18px 40px rgba(16,185,129,0.16)',
+                    eyebrow: '#86EFAC',
+                    text: '#ECFDF5'
+                }
+            };
+
+            const activePalette = palette[tone] || palette.info;
+            card.style.display = 'block';
+            card.style.borderColor = activePalette.border;
+            card.style.background = activePalette.background;
+            card.style.boxShadow = activePalette.shadow;
+            card.style.setProperty('--dashboard-suggestion-eyebrow', activePalette.eyebrow);
+            text.style.color = activePalette.text;
+            text.textContent = message;
+        }
+
+        function applyDashboardPathSuggestion(alternativeGroups = []) {
+            const suggestion = dashboardPathSuggestion || {};
+            const matchingGroup = (alternativeGroups || []).find(group => normalizeValue(group.pathway) === normalizeValue(suggestion.recommendedPathway))
+                || alternativeGroups[0];
+
+            if (!matchingGroup) {
+                navigateTo('dashboard');
+                return;
+            }
+
+            const starterLesson = matchingGroup.lessons.find(lesson => !isLessonCompleted(lesson)) || matchingGroup.lessons[0] || {};
+            const targetCategory = starterLesson.category || starterLesson.pathway || matchingGroup.pathway || AppState.learningPreferences.category;
+            const proficiencyOptions = getRecommendedProficiencyOptions(AppState.learningPreferences.proficiency);
+            const targetProficiency = suggestion.recommendedProficiency && proficiencyOptions.some(option => normalizeValue(option) === normalizeValue(suggestion.recommendedProficiency))
+                ? suggestion.recommendedProficiency
+                : (proficiencyOptions[0] || AppState.learningPreferences.proficiency || '');
+
+            if (targetCategory) {
+                setLearningPreference('category', targetCategory);
+            }
+
+            if (targetProficiency) {
+                setLearningPreference('proficiency', targetProficiency);
+            }
+
+            navigateTo('dashboard');
+        }
+
+        async function requestDashboardPathSuggestion(context, fallbackSuggestion) {
+            const requestToken = ++dashboardSuggestionRequestToken;
+
+            if (AIRecommendationService.hasEndpoint()) {
+                setDashboardPathSuggestion('Finding a fresh pathway for you...', 'info', fallbackSuggestion || {});
+            } else if (fallbackSuggestion) {
+                setDashboardPathSuggestion(fallbackSuggestion.message, fallbackSuggestion.tone, fallbackSuggestion);
+                return fallbackSuggestion;
+            }
+
+            const aiSuggestion = await AIRecommendationService.generate(context);
+            if (requestToken !== dashboardSuggestionRequestToken) {
+                return fallbackSuggestion;
+            }
+
+            if (!aiSuggestion) {
+                if (fallbackSuggestion) {
+                    setDashboardPathSuggestion(fallbackSuggestion.message, fallbackSuggestion.tone, fallbackSuggestion);
+                }
+                return fallbackSuggestion;
+            }
+
+            setDashboardPathSuggestion(aiSuggestion.message, aiSuggestion.tone, aiSuggestion);
+            return aiSuggestion;
         }
 
         function getQuestionPromptLabel(question, { isPronunciationQuestion = false, isSpellingQuestion = false } = {}) {
