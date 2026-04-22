@@ -1,0 +1,30 @@
+{
+  "name": "cebulingo-app",
+  "version": "1.0.0",
+  "description": "CebuLingo has been successfully converted from React to pure HTML, CSS, and vanilla JavaScript while maintaining all the original designs and functionality.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "cap:copy": "npx cap copy android",
+    "cap:sync": "npx cap sync android",
+    "cap:open": "npx cap open android"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AldousMaranga/Cebulingo-app.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/AldousMaranga/Cebulingo-app/issues"
+  },
+  "homepage": "https://github.com/AldousMaranga/Cebulingo-app#readme",
+  "dependencies": {
+    "@capacitor-community/text-to-speech": "^8.0.0",
+    "@capacitor/android": "^8.3.1",
+    "@capacitor/cli": "^8.3.1",
+    "@capacitor/core": "^8.3.1"
+  }
+}
