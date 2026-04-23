@@ -258,6 +258,22 @@
         // Text-to-Speech
         const TTS = {
             currentAudio: null,
+            getNativeBridge() {
+                if (typeof window === 'undefined') {
+                    return null;
+                }
+
+                const capacitor = window.Capacitor;
+                if (!capacitor || typeof capacitor.getPlatform !== 'function' || capacitor.getPlatform() !== 'android') {
+                    return null;
+                }
+
+                if (!window.NativeTTS || typeof window.NativeTTS.speak !== 'function') {
+                    return null;
+                }
+
+                return window.NativeTTS;
+            },
             getNativePlugin() {
                 const capacitor = window.Capacitor;
                 if (!capacitor || typeof capacitor.getPlatform !== 'function') {
@@ -281,6 +297,18 @@
                 if (audioSource) {
                     await this.playAudioSource(audioSource);
                     return true;
+                }
+
+                const nativeBridge = this.getNativeBridge();
+                if (nativeBridge) {
+                    try {
+                        if (typeof nativeBridge.isAvailable !== 'function' || nativeBridge.isAvailable()) {
+                            nativeBridge.speak(text, lang);
+                            return true;
+                        }
+                    } catch (error) {
+                        console.warn('Native Android TTS bridge failed, falling back to plugin/browser audio.', error);
+                    }
                 }
 
                 const nativePlugin = this.getNativePlugin();
@@ -350,6 +378,15 @@
                     this.currentAudio = null;
                 }
 
+                const nativeBridge = this.getNativeBridge();
+                if (nativeBridge?.stop) {
+                    try {
+                        nativeBridge.stop();
+                    } catch (error) {
+                        console.warn('Native Android TTS stop failed.', error);
+                    }
+                }
+
                 const nativePlugin = this.getNativePlugin();
                 if (nativePlugin?.stop) {
                     try {
@@ -392,13 +429,64 @@
             }
         };
 
-        const PronunciationChecker = {
-            recognition: null,
-            getRecognitionConstructor() {
-                return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+        const NativeSpeechRecognition = {
+            pendingRequest: null,
+            listenerAttached: false,
+            getBridge() {
+                if (typeof window === 'undefined') {
+                    return null;
+                }
+
+                const capacitor = window.Capacitor;
+                if (!capacitor || typeof capacitor.getPlatform !== 'function' || capacitor.getPlatform() !== 'android') {
+                    return null;
+                }
+
+                if (!window.NativeSpeech || typeof window.NativeSpeech.startListening !== 'function') {
+                    return null;
+                }
+
+                return window.NativeSpeech;
             },
             isSupported() {
-                return Boolean(this.getRecognitionConstructor());
+                const bridge = this.getBridge();
+                if (!bridge) {
+                    return false;
+                }
+
+                if (typeof bridge.isAvailable === 'function') {
+                    try {
+                        return bridge.isAvailable();
+                    } catch (error) {
+                        console.warn('Native speech availability check failed.', error);
+                    }
+                }
+
+                return true;
+            },
+            ensureListener() {
+                if (this.listenerAttached || typeof window === 'undefined') {
+                    return;
+                }
+
+                window.addEventListener('cebulingo-native-speech', (event) => {
+                    const detail = event?.detail || {};
+                    const request = this.pendingRequest;
+                    if (!request || detail.sessionId !== request.sessionId) {
+                        return;
+                    }
+
+                    if (detail.type === 'result') {
+                        request.onResult(detail.transcript || '');
+                    } else if (detail.type === 'error') {
+                        request.onError(detail.message || 'Speech recognition failed. Please try again.');
+                    }
+
+                    request.onEnd();
+                    this.pendingRequest = null;
+                });
+
+                this.listenerAttached = true;
             },
             startListening({
                 lang = 'fil-PH',
@@ -407,6 +495,77 @@
                 onError = () => { },
                 onEnd = () => { }
             } = {}) {
+                const bridge = this.getBridge();
+                if (!bridge) {
+                    return false;
+                }
+
+                this.ensureListener();
+
+                if (this.pendingRequest) {
+                    this.stopListening();
+                }
+
+                const sessionId = `native-speech-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+                this.pendingRequest = {
+                    sessionId,
+                    onResult,
+                    onError,
+                    onEnd
+                };
+
+                onStart();
+
+                try {
+                    bridge.startListening(sessionId, lang || 'fil-PH');
+                } catch (error) {
+                    this.pendingRequest = null;
+                    onError(error?.message || 'Speech recognition failed to start.');
+                    onEnd();
+                }
+
+                return true;
+            },
+            stopListening() {
+                const bridge = this.getBridge();
+                if (bridge && typeof bridge.cancel === 'function') {
+                    try {
+                        bridge.cancel();
+                    } catch (error) {
+                        console.warn('Native speech cancellation failed.', error);
+                    }
+                }
+
+                this.pendingRequest = null;
+            }
+        };
+
+        const PronunciationChecker = {
+            recognition: null,
+            getRecognitionConstructor() {
+                return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+            },
+            isSupported() {
+                return NativeSpeechRecognition.isSupported() || Boolean(this.getRecognitionConstructor());
+            },
+            startListening({
+                lang = 'fil-PH',
+                onStart = () => { },
+                onResult = () => { },
+                onError = () => { },
+                onEnd = () => { }
+            } = {}) {
+                if (NativeSpeechRecognition.isSupported()) {
+                    NativeSpeechRecognition.startListening({
+                        lang,
+                        onStart,
+                        onResult,
+                        onError,
+                        onEnd
+                    });
+                    return;
+                }
+
                 const RecognitionConstructor = this.getRecognitionConstructor();
 
                 if (!RecognitionConstructor) {
@@ -454,6 +613,8 @@
                 recognition.start();
             },
             stopListening() {
+                NativeSpeechRecognition.stopListening();
+
                 if (this.recognition) {
                     this.recognition.stop();
                     this.recognition = null;
@@ -3561,7 +3722,9 @@
             updatePronunciationUiState();
 
             try {
-                await MicrophoneAccess.ensurePermission();
+                if (!NativeSpeechRecognition.isSupported()) {
+                    await MicrophoneAccess.ensurePermission();
+                }
             } catch (error) {
                 pronunciationError = error?.message || 'Microphone permission is required.';
                 updatePronunciationUiState();
@@ -3645,7 +3808,7 @@
             screen.appendChild(header);
 
             // Question content
-            const content = createElement('div', `flex-1 flex flex-col ${isMobile ? 'px-6 py-4' : 'px-12 py-8'}`);
+            const content = createElement('div', `flex-1 flex flex-col ${isMobile ? 'px-5 py-3' : 'px-12 py-8'}`);
             const currentQuestion = questions[currentQuestionIndex];
             const normalizedDifficulty = normalizeDifficulty(currentQuestion.difficulty || selectedLesson?.difficulty);
             const normalizedLessonType = normalizeValue(currentQuestion.lessonType || selectedLesson?.lessonType || selectedLesson?.type);
@@ -3688,9 +3851,9 @@
             }
 
             // Question text
-            const questionText = createElement('div', 'text-center mb-8');
+            const questionText = createElement('div', `text-center ${isMobile ? 'mb-4' : 'mb-8'}`);
             const instruction = createElement('p', 'text-[#BEBEBE] mb-4');
-            instruction.style.fontSize = isMobile ? '14px' : '16px';
+            instruction.style.fontSize = isMobile ? '13px' : '16px';
             const pronunciationPrompt = getPronunciationPrompt(currentQuestion);
             const pronunciationTarget = getPronunciationTarget(currentQuestion);
             const pronunciationGuide = getPronunciationGuide(currentQuestion);
@@ -3705,7 +3868,7 @@
                             : (shouldShowQuestionImage ? 'What is shown in this image?' : 'What does this mean?');
 
             const cebuanoWord = createElement('h1', 'text-white');
-            cebuanoWord.style.fontSize = isMobile ? '32px' : '48px';
+            cebuanoWord.style.fontSize = isMobile ? '28px' : '48px';
             cebuanoWord.style.fontWeight = '700';
             cebuanoWord.textContent = (isPronunciationQuestion || isSpellingQuestion) ? pronunciationPrompt : currentQuestion.question;
 
@@ -3733,7 +3896,7 @@
                 const audioStatus = createElement('p', 'mt-3');
                 audioStatus.id = 'exercise-audio-status';
                 audioStatus.style.minHeight = '20px';
-                audioStatus.style.fontSize = '13px';
+                audioStatus.style.fontSize = isMobile ? '12px' : '13px';
                 audioStatus.style.color = '#FBBF24';
 
                 const speakerBtn = createElement('button', 'btn-icon mt-4');
@@ -3837,22 +4000,31 @@
                 spellingPanel.appendChild(answerCard);
                 content.appendChild(spellingPanel);
             } else {
-                const optionsGrid = createElement('div', 'lesson-options-grid flex-1 max-w-3xl mx-auto w-full');
+                const optionsPanel = createElement('div', 'card lesson-options-panel flex-1 max-w-3xl mx-auto w-full');
+                optionsPanel.style.backgroundColor = '#232323';
+                optionsPanel.style.border = '1px solid #343434';
+                optionsPanel.style.borderRadius = '24px';
+                optionsPanel.style.padding = isMobile ? '0.875rem' : '1.25rem';
+                optionsPanel.style.boxShadow = '0 18px 44px rgba(0, 0, 0, 0.18)';
+
+                const optionsGrid = createElement('div', 'lesson-options-grid w-full');
                 optionsGrid.style.display = 'grid';
                 optionsGrid.style.gridTemplateColumns = 'repeat(2, minmax(0, 1fr))';
-                optionsGrid.style.gap = isMobile ? '0.875rem' : '1rem';
+                optionsGrid.style.gap = isMobile ? '0.625rem' : '1rem';
 
                 currentQuestion.choices.forEach((choice, index) => {
                     const optionCard = createElement('div', 'image-card transition-all cursor-pointer');
-                    optionCard.style.height = isMobile ? '92px' : '150px';
+                    optionCard.style.minHeight = isMobile ? '74px' : '120px';
                     optionCard.style.backgroundColor = '#2A2A2A';
                     optionCard.style.display = 'flex';
                     optionCard.style.alignItems = 'center';
                     optionCard.style.justifyContent = 'center';
-                    optionCard.style.padding = isMobile ? '0.75rem' : '1rem';
+                    optionCard.style.padding = isMobile ? '0.65rem' : '1rem';
+                    optionCard.style.border = '1px solid #3A3A3A';
 
                     const label = createElement('p', 'text-white text-center');
-                    label.style.fontSize = isMobile ? '14px' : '16px';
+                    label.style.fontSize = isMobile ? '13px' : '16px';
+                    label.style.lineHeight = '1.3';
                     label.textContent = choice;
 
                     optionCard.appendChild(label);
@@ -3861,14 +4033,19 @@
                     optionsGrid.appendChild(optionCard);
                 });
 
-                content.appendChild(optionsGrid);
+                optionsPanel.appendChild(optionsGrid);
+                content.appendChild(optionsPanel);
             }
 
             // Check button
             const buttonContainer = createElement('div', `w-full max-w-3xl mx-auto mt-6`);
             buttonContainer.style.display = 'flex';
             buttonContainer.style.flexDirection = isPronunciationQuestion ? (isMobile ? 'column' : 'row') : 'column';
-            buttonContainer.style.gap = '12px';
+            buttonContainer.style.gap = isMobile ? '10px' : '12px';
+            if (isMobile) {
+                buttonContainer.style.marginTop = '12px';
+                buttonContainer.style.paddingBottom = 'calc(env(safe-area-inset-bottom, 0px) + 4px)';
+            }
 
             const coachCard = createElement('div', 'lesson-coach-card');
             coachCard.id = 'lesson-coach-card';
@@ -3915,6 +4092,28 @@
 
             if (typeof lucide !== 'undefined') {
                 lucide.createIcons();
+            }
+
+            if ((isPronunciationQuestion || isSpellingQuestion) && !isPhraseTypingQuestion && !isPhrasePronunciationQuestion) {
+                const audioStatus = document.getElementById('exercise-audio-status');
+                const lessonAudioSource = getQuestionAudioSource(currentQuestion);
+
+                requestAnimationFrame(async () => {
+                    if (!audioStatus) {
+                        return;
+                    }
+
+                    audioStatus.textContent = '';
+
+                    try {
+                        await TTS.speak(pronunciationTarget, 'fil-PH', lessonAudioSource);
+                    } catch (error) {
+                        console.error('Question intro audio failed to autoplay.', error);
+                        audioStatus.textContent = lessonAudioSource
+                            ? 'Tap the speaker button if the example audio did not start automatically.'
+                            : 'Tap the speaker button to hear the pronunciation example on this device.';
+                    }
+                });
             }
 
             if (isPronunciationQuestion) {
