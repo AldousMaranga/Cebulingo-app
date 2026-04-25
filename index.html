@@ -250,6 +250,11 @@
             AppState.selectedLessonId = null;
             AppState.selectedLessonTitle = null;
             Storage.clear('userData');
+            Storage.clear('learningPreferences');
+            AppState.learningPreferences = {
+                category: null,
+                proficiency: null
+            };
             navigateTo(redirectTo);
         }
 
@@ -1237,6 +1242,9 @@
         function setLearningPreference(key, value) {
             AppState.learningPreferences[key] = value;
             Storage.save('learningPreferences', AppState.learningPreferences);
+            syncLearningPreferencesToFirestore().catch((error) => {
+                console.error('Failed to sync learning preferences:', error);
+            });
         }
 
         function resetLearningPreferences() {
@@ -1245,6 +1253,23 @@
                 proficiency: null
             };
             Storage.save('learningPreferences', AppState.learningPreferences);
+            syncLearningPreferencesToFirestore().catch((error) => {
+                console.error('Failed to reset learning preferences in Firestore:', error);
+            });
+        }
+
+        function syncLearningPreferencesToFirestore(user = auth.currentUser) {
+            if (!user) {
+                return Promise.resolve();
+            }
+
+            return db.collection(USER_PROFILE_COLLECTION).doc(user.uid).set({
+                learningPreferences: {
+                    category: AppState.learningPreferences.category ?? null,
+                    proficiency: AppState.learningPreferences.proficiency ?? null
+                },
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
         }
 
         function getOrderedProficiencyLevels() {
@@ -1718,6 +1743,14 @@
                 completedLessons: existingProfile.completedLessons ?? AppState.userData.completedLessons ?? [],
                 lessonResults: existingProfile.lessonResults ?? AppState.userData.lessonResults ?? {},
                 lastActiveDate: existingProfile.lastActiveDate ?? AppState.userData.lastActiveDate ?? '',
+                learningPreferences: {
+                    category: profileSnapshot.exists
+                        ? (existingProfile.learningPreferences?.category ?? null)
+                        : (AppState.learningPreferences.category ?? null),
+                    proficiency: profileSnapshot.exists
+                        ? (existingProfile.learningPreferences?.proficiency ?? null)
+                        : (AppState.learningPreferences.proficiency ?? null)
+                },
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                 lastLogin: firebase.firestore.FieldValue.serverTimestamp()
             };
@@ -1767,6 +1800,12 @@
                 AppState.userData.completedLessons = data.completedLessons || AppState.userData.completedLessons;
                 AppState.userData.lessonResults = data.lessonResults || AppState.userData.lessonResults;
                 AppState.userData.lastActiveDate = data.lastActiveDate || AppState.userData.lastActiveDate;
+
+                AppState.learningPreferences = {
+                    category: data.learningPreferences?.category ?? null,
+                    proficiency: data.learningPreferences?.proficiency ?? null
+                };
+                Storage.save('learningPreferences', AppState.learningPreferences);
             }
 
             await updateUserDailyActivity(user);
