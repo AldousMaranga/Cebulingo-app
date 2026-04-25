@@ -2238,7 +2238,7 @@
                         lessonButton.style.cssText = `width: ${isMobile ? '92px' : '112px'}; height: ${isMobile ? '92px' : '112px'}; border-radius: 999px; border: none; cursor: ${lessonState === 'locked' ? 'default' : 'pointer'}; background: linear-gradient(180deg, ${lessonColor} 0%, ${lessonState === 'locked' ? '#303030' : lessonColor} 100%); box-shadow: 0 18px 32px ${lessonGlow}; display: flex; align-items: center; justify-content: center; position: relative; z-index: 2; transition: transform 0.2s ease, box-shadow 0.2s ease; opacity: ${lessonState === 'locked' ? '0.7' : '1'};`;
                         lessonButton.innerHTML = `<i data-lucide="${buttonIcon}" style="width: ${isMobile ? '42px' : '48px'}; height: ${isMobile ? '42px' : '48px'}; color: white;"></i>`;
 
-                        if (lessonState !== 'locked') {
+                        if (lessonState !== 'locked' && lessonState !== 'completed') {
                             lessonButton.onclick = () => {
                                 AppState.selectedLessonId = lesson.id;
                                 AppState.selectedLessonTitle = lesson.title;
@@ -2266,7 +2266,9 @@
 
                         const difficultyText = createElement('p', '');
                         difficultyText.style.cssText = `margin-top: 0.65rem; font-size: ${isMobile ? '12px' : '13px'}; color: ${textColor}; letter-spacing: 0.02em;`;
-                        difficultyText.textContent = lesson.difficulty ? lesson.difficulty : 'Lesson';
+                        difficultyText.textContent = lessonState === 'completed'
+                            ? 'Review this lesson in Modules'
+                            : (lesson.difficulty ? lesson.difficulty : 'Lesson');
 
                         lessonInfo.appendChild(lessonTitle);
                         lessonInfo.appendChild(starsContainer);
@@ -5026,6 +5028,9 @@
         function renderModules() {
             const container = document.getElementById('content-container');
             const isMobile = AppState.isMobile;
+            const completedLessons = sortLessonsForPath(
+                (AppState.lessonList || []).filter((lesson) => isLessonCompleted(lesson))
+            );
 
             const screen = createElement('div', 'flex flex-col h-full overflow-y-auto');
             screen.style.backgroundColor = '#1C1C1C';
@@ -5041,78 +5046,80 @@
 
             // Content
             const content = createElement('div', `flex-1 ${isMobile ? 'px-6 py-6' : 'px-12 py-8'}`);
+            const subtitle = createElement('p', 'text-[#BEBEBE]');
+            subtitle.style.cssText = `font-size: ${isMobile ? '14px' : '16px'}; margin-bottom: 1.5rem;`;
+            subtitle.textContent = 'Review the lessons you have already completed. Finished lessons open here instead of on the Dashboard.';
+            content.appendChild(subtitle);
 
-            const modules = [
-                { id: 1, title: 'Basics', icon: '\uD83C\uDF1F', lessons: 5, completed: 5, locked: false },
-                { id: 2, title: 'Family & Friends', icon: '\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67', lessons: 5, completed: 2, locked: false },
-                { id: 3, title: 'Food & Dining', icon: '\uD83C\uDF7D\uFE0F', lessons: 5, completed: 0, locked: true },
-                { id: 4, title: 'Numbers & Time', icon: '\u23F0', lessons: 5, completed: 0, locked: true },
-                { id: 5, title: 'Shopping', icon: '\uD83D\uDECD\uFE0F', lessons: 5, completed: 0, locked: true },
-                { id: 6, title: 'Travel', icon: '\u2708\uFE0F', lessons: 5, completed: 0, locked: true }
-            ];
+            if (!completedLessons.length) {
+                const emptyState = createElement('div', 'card p-6');
+                emptyState.style.cssText = 'background: linear-gradient(180deg, #262626 0%, #202020 100%); border: 1px solid #2E2E2E; border-radius: 1.5rem;';
 
-            const modulesGrid = createElement('div', `grid ${isMobile ? 'grid-1' : 'grid-2'} gap-4`);
+                const emptyTitle = createElement('p', 'text-white mb-2');
+                emptyTitle.style.fontSize = '18px';
+                emptyTitle.style.fontWeight = '700';
+                emptyTitle.textContent = 'No completed lessons yet';
 
-            modules.forEach(module => {
-                const card = createElement('div', `card p-6 transition-all ${module.locked ? 'opacity-50' : 'hover:scale-[1.02] cursor-pointer'}`);
+                const emptyText = createElement('p', 'text-[#BEBEBE]');
+                emptyText.style.fontSize = '14px';
+                emptyText.textContent = 'Finish a lesson from your learning path, then come back here to review it any time.';
 
-                const topRow = createElement('div', 'flex items-start justify-between mb-4');
+                emptyState.appendChild(emptyTitle);
+                emptyState.appendChild(emptyText);
+                content.appendChild(emptyState);
+            } else {
+                const modulesGrid = createElement('div', `grid ${isMobile ? 'grid-1' : 'grid-2'} gap-4`);
 
-                const leftSide = createElement('div', 'flex items-center gap-4');
-                const icon = createElement('div', 'text-5xl');
-                icon.textContent = module.icon;
+                completedLessons.forEach((lesson, index) => {
+                    const meta = getPathwayMeta(lesson.pathway || lesson.category || 'General Pathway', index);
+                    const card = createElement('div', 'card p-6 transition-all hover:scale-[1.02] cursor-pointer');
+                    card.style.cssText = 'background: linear-gradient(180deg, #262626 0%, #202020 100%); border: 1px solid #2E2E2E; border-radius: 1.5rem;';
 
-                const info = createElement('div', '');
-                const moduleTitle = createElement('h3', 'text-white mb-1');
-                moduleTitle.style.fontSize = isMobile ? '18px' : '22px';
-                moduleTitle.textContent = module.title;
+                    const topRow = createElement('div', 'flex items-start justify-between mb-4');
 
-                const lessonsText = createElement('p', 'text-[#BEBEBE]');
-                lessonsText.style.fontSize = '14px';
-                lessonsText.textContent = `${module.lessons} lessons`;
+                    const leftSide = createElement('div', 'flex items-center gap-4');
+                    const icon = createElement('div', 'flex items-center justify-center rounded-2xl');
+                    icon.style.cssText = `width: 56px; height: 56px; background: linear-gradient(135deg, ${meta.color} 0%, ${meta.accent} 100%); font-size: 24px; box-shadow: 0 10px 24px ${meta.color}30;`;
+                    icon.innerHTML = `<i data-lucide="${meta.icon}" style="width: 24px; height: 24px; color: white;"></i>`;
 
-                info.appendChild(moduleTitle);
-                info.appendChild(lessonsText);
-                leftSide.appendChild(icon);
-                leftSide.appendChild(info);
+                    const info = createElement('div', '');
+                    const moduleTitle = createElement('h3', 'text-white mb-1');
+                    moduleTitle.style.fontSize = isMobile ? '18px' : '22px';
+                    moduleTitle.textContent = lesson.title || 'Completed Lesson';
 
-                const status = createElement('div', '');
-                if (module.locked) {
-                    status.innerHTML = '<i data-lucide="lock" style="width: 24px; height: 24px; color: #666;"></i>';
-                } else {
-                    status.innerHTML = `<i data-lucide="check-circle" style="width: 24px; height: 24px; color: #10B981;"></i>`;
-                }
+                    const lessonsText = createElement('p', 'text-[#BEBEBE]');
+                    lessonsText.style.fontSize = '14px';
+                    lessonsText.textContent = `${lesson.pathway || lesson.category || 'General Pathway'} • ${lesson.difficulty || 'Lesson'}`;
 
-                topRow.appendChild(leftSide);
-                topRow.appendChild(status);
+                    info.appendChild(moduleTitle);
+                    info.appendChild(lessonsText);
+                    leftSide.appendChild(icon);
+                    leftSide.appendChild(info);
 
-                // Progress bar
-                if (!module.locked) {
-                    const progressContainer = createElement('div', 'mt-4');
-                    const progressBar = createElement('div', 'progress-bar');
-                    const progressFill = createElement('div', 'progress-bar-fill');
-                    progressFill.style.width = `${(module.completed / module.lessons) * 100}%`;
-                    progressBar.appendChild(progressFill);
+                    const status = createElement('div', '');
+                    status.innerHTML = '<i data-lucide="refresh-cw" style="width: 24px; height: 24px; color: #6BB6FF;"></i>';
 
-                    const progressText = createElement('p', 'text-[#BEBEBE] mt-2');
-                    progressText.style.fontSize = '12px';
-                    progressText.textContent = `${module.completed}/${module.lessons} completed`;
+                    topRow.appendChild(leftSide);
+                    topRow.appendChild(status);
 
-                    progressContainer.appendChild(progressBar);
-                    progressContainer.appendChild(progressText);
-                    card.appendChild(progressContainer);
-                }
+                    const reviewText = createElement('p', 'text-[#BEBEBE]');
+                    reviewText.style.fontSize = '13px';
+                    reviewText.textContent = 'Tap to review this completed lesson.';
 
-                card.appendChild(topRow);
+                    card.appendChild(topRow);
+                    card.appendChild(reviewText);
 
-                if (!module.locked) {
-                    card.onclick = () => navigateTo('lesson-start');
-                }
+                    card.onclick = () => {
+                        AppState.selectedLessonId = lesson.id;
+                        AppState.selectedLessonTitle = lesson.title;
+                        navigateTo('lesson-start');
+                    };
 
-                modulesGrid.appendChild(card);
-            });
+                    modulesGrid.appendChild(card);
+                });
 
-            content.appendChild(modulesGrid);
+                content.appendChild(modulesGrid);
+            }
             screen.appendChild(content);
 
             // Bottom spacer and nav
