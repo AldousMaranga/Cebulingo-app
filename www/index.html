@@ -81,6 +81,7 @@
             lessonList: [],
             selectedLessonId: null,
             selectedLessonTitle: null,
+            selectedModulePathway: null,
             learningPreferences: {
                 category: null,
                 proficiency: null
@@ -249,6 +250,7 @@
             AppState.userData = createDefaultUserData();
             AppState.selectedLessonId = null;
             AppState.selectedLessonTitle = null;
+            AppState.selectedModulePathway = null;
             Storage.clear('userData');
             Storage.clear('learningPreferences');
             AppState.learningPreferences = {
@@ -1420,6 +1422,41 @@
                     ...group,
                     lessons: sortLessonsForPath(group.lessons)
                 }));
+        }
+
+        function getModuleCategoryGroups() {
+            const groupedLessons = getGroupedLessonsByPathway(AppState.lessonList || []);
+            const firstIncompleteGroupIndex = groupedLessons.findIndex((group) =>
+                Array.isArray(group.lessons) && group.lessons.some((lesson) => !isLessonCompleted(lesson))
+            );
+            const maxUnlockedIndex = firstIncompleteGroupIndex === -1
+                ? groupedLessons.length - 1
+                : Math.min(firstIncompleteGroupIndex + 1, groupedLessons.length - 1);
+
+            return groupedLessons.map((group, index) => {
+                const totalLessons = Array.isArray(group.lessons) ? group.lessons.length : 0;
+                const completedLessons = totalLessons
+                    ? group.lessons.filter((lesson) => isLessonCompleted(lesson))
+                    : [];
+                const completedCount = completedLessons.length;
+                const isUnlocked = index <= maxUnlockedIndex;
+                const isCurrent = firstIncompleteGroupIndex === -1
+                    ? index === groupedLessons.length - 1
+                    : index === firstIncompleteGroupIndex;
+                const isNext = firstIncompleteGroupIndex !== -1 && index === firstIncompleteGroupIndex + 1;
+                const isCompleted = totalLessons > 0 && completedCount === totalLessons;
+
+                return {
+                    ...group,
+                    totalLessons,
+                    completedLessons,
+                    completedCount,
+                    isUnlocked,
+                    isCurrent,
+                    isNext,
+                    isCompleted
+                };
+            });
         }
 
         function isLessonCompleted(lesson) {
@@ -5025,12 +5062,20 @@
         // Module List Screen
 
 
-        function renderModules() {
+        async function renderModules() {
             const container = document.getElementById('content-container');
             const isMobile = AppState.isMobile;
-            const completedLessons = sortLessonsForPath(
-                (AppState.lessonList || []).filter((lesson) => isLessonCompleted(lesson))
-            );
+
+            if (!AppState.lessonList.length) {
+                renderLoadingSplash('Loading modules...');
+                await fetchLessonsFromFirestore();
+
+                if (AppState.currentScreen !== 'modules') {
+                    return;
+                }
+            }
+
+            const moduleGroups = getModuleCategoryGroups();
 
             const screen = createElement('div', 'flex flex-col h-full overflow-y-auto');
             screen.style.backgroundColor = '#1C1C1C';
@@ -5048,21 +5093,21 @@
             const content = createElement('div', `flex-1 ${isMobile ? 'px-6 py-6' : 'px-12 py-8'}`);
             const subtitle = createElement('p', 'text-[#BEBEBE]');
             subtitle.style.cssText = `font-size: ${isMobile ? '14px' : '16px'}; margin-bottom: 1.5rem;`;
-            subtitle.textContent = 'Review the lessons you have already completed. Finished lessons open here instead of on the Dashboard.';
+            subtitle.textContent = 'Browse all lesson categories here. Unlocked categories are available now, while locked ones stay visible until you progress further.';
             content.appendChild(subtitle);
 
-            if (!completedLessons.length) {
+            if (!moduleGroups.length) {
                 const emptyState = createElement('div', 'card p-6');
                 emptyState.style.cssText = 'background: linear-gradient(180deg, #262626 0%, #202020 100%); border: 1px solid #2E2E2E; border-radius: 1.5rem;';
 
                 const emptyTitle = createElement('p', 'text-white mb-2');
                 emptyTitle.style.fontSize = '18px';
                 emptyTitle.style.fontWeight = '700';
-                emptyTitle.textContent = 'No completed lessons yet';
+                emptyTitle.textContent = 'No lesson categories yet';
 
                 const emptyText = createElement('p', 'text-[#BEBEBE]');
                 emptyText.style.fontSize = '14px';
-                emptyText.textContent = 'Finish a lesson from your learning path, then come back here to review it any time.';
+                emptyText.textContent = 'Lesson categories will appear here once they are available in the app.';
 
                 emptyState.appendChild(emptyTitle);
                 emptyState.appendChild(emptyText);
@@ -5070,26 +5115,26 @@
             } else {
                 const modulesGrid = createElement('div', `grid ${isMobile ? 'grid-1' : 'grid-2'} gap-4`);
 
-                completedLessons.forEach((lesson, index) => {
-                    const meta = getPathwayMeta(lesson.pathway || lesson.category || 'General Pathway', index);
-                    const card = createElement('div', 'card p-6 transition-all hover:scale-[1.02] cursor-pointer');
-                    card.style.cssText = 'background: linear-gradient(180deg, #262626 0%, #202020 100%); border: 1px solid #2E2E2E; border-radius: 1.5rem;';
+                moduleGroups.forEach((group, index) => {
+                    const meta = getPathwayMeta(group.pathway || 'General Pathway', index);
+                    const card = createElement('div', `card p-6 transition-all ${group.isUnlocked ? 'hover:scale-[1.02] cursor-pointer' : ''}`);
+                    card.style.cssText = `background: linear-gradient(180deg, #262626 0%, #202020 100%); border: 1px solid ${group.isUnlocked ? '#2E2E2E' : '#252525'}; border-radius: 1.5rem; opacity: ${group.isUnlocked ? '1' : '0.48'};`;
 
                     const topRow = createElement('div', 'flex items-start justify-between mb-4');
 
                     const leftSide = createElement('div', 'flex items-center gap-4');
                     const icon = createElement('div', 'flex items-center justify-center rounded-2xl');
-                    icon.style.cssText = `width: 56px; height: 56px; background: linear-gradient(135deg, ${meta.color} 0%, ${meta.accent} 100%); font-size: 24px; box-shadow: 0 10px 24px ${meta.color}30;`;
+                    icon.style.cssText = `width: 56px; height: 56px; background: linear-gradient(135deg, ${group.isUnlocked ? meta.color : '#4B5563'} 0%, ${group.isUnlocked ? meta.accent : '#6B7280'} 100%); font-size: 24px; box-shadow: ${group.isUnlocked ? `0 10px 24px ${meta.color}30` : 'none'};`;
                     icon.innerHTML = `<i data-lucide="${meta.icon}" style="width: 24px; height: 24px; color: white;"></i>`;
 
                     const info = createElement('div', '');
                     const moduleTitle = createElement('h3', 'text-white mb-1');
                     moduleTitle.style.fontSize = isMobile ? '18px' : '22px';
-                    moduleTitle.textContent = lesson.title || 'Completed Lesson';
+                    moduleTitle.textContent = group.pathway || 'General Pathway';
 
                     const lessonsText = createElement('p', 'text-[#BEBEBE]');
                     lessonsText.style.fontSize = '14px';
-                    lessonsText.textContent = `${lesson.pathway || lesson.category || 'General Pathway'} • ${lesson.difficulty || 'Lesson'}`;
+                    lessonsText.textContent = `${group.completedCount}/${group.totalLessons} lessons completed`;
 
                     info.appendChild(moduleTitle);
                     info.appendChild(lessonsText);
@@ -5097,23 +5142,42 @@
                     leftSide.appendChild(info);
 
                     const status = createElement('div', '');
-                    status.innerHTML = '<i data-lucide="refresh-cw" style="width: 24px; height: 24px; color: #6BB6FF;"></i>';
+                    if (!group.isUnlocked) {
+                        status.innerHTML = '<i data-lucide="lock" style="width: 24px; height: 24px; color: #6B7280;"></i>';
+                    } else if (group.isCompleted) {
+                        status.innerHTML = '<i data-lucide="check-circle" style="width: 24px; height: 24px; color: #10B981;"></i>';
+                    } else if (group.isCurrent) {
+                        status.innerHTML = '<i data-lucide="play-circle" style="width: 24px; height: 24px; color: #6BB6FF;"></i>';
+                    } else if (group.isNext) {
+                        status.innerHTML = '<i data-lucide="arrow-right-circle" style="width: 24px; height: 24px; color: #F59E0B;"></i>';
+                    } else {
+                        status.innerHTML = '<i data-lucide="book-open" style="width: 24px; height: 24px; color: #6BB6FF;"></i>';
+                    }
 
                     topRow.appendChild(leftSide);
                     topRow.appendChild(status);
 
                     const reviewText = createElement('p', 'text-[#BEBEBE]');
                     reviewText.style.fontSize = '13px';
-                    reviewText.textContent = 'Tap to review this completed lesson.';
+                    if (!group.isUnlocked) {
+                        reviewText.textContent = 'Locked until you finish the earlier categories.';
+                    } else if (group.isCurrent) {
+                        reviewText.textContent = 'Current category. Tap to view the lessons you have finished so far.';
+                    } else if (group.isNext) {
+                        reviewText.textContent = 'Next category in line. Tap to preview your review space for this pathway.';
+                    } else {
+                        reviewText.textContent = 'Tap to review finished lessons in this category.';
+                    }
 
                     card.appendChild(topRow);
                     card.appendChild(reviewText);
 
-                    card.onclick = () => {
-                        AppState.selectedLessonId = lesson.id;
-                        AppState.selectedLessonTitle = lesson.title;
-                        navigateTo('lesson-start');
-                    };
+                    if (group.isUnlocked) {
+                        card.onclick = () => {
+                            AppState.selectedModulePathway = group.normalizedPathway;
+                            navigateTo('module-category');
+                        };
+                    }
 
                     modulesGrid.appendChild(card);
                 });
@@ -5123,6 +5187,122 @@
             screen.appendChild(content);
 
             // Bottom spacer and nav
+            const spacer = createElement('div', '');
+            spacer.style.height = '80px';
+            screen.appendChild(spacer);
+            screen.appendChild(createBottomNav('modules'));
+
+            container.appendChild(screen);
+
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        }
+
+        async function renderModuleCategory() {
+            const container = document.getElementById('content-container');
+            const isMobile = AppState.isMobile;
+
+            if (!AppState.lessonList.length) {
+                renderLoadingSplash('Loading module category...');
+                await fetchLessonsFromFirestore();
+
+                if (AppState.currentScreen !== 'module-category') {
+                    return;
+                }
+            }
+
+            const moduleGroups = getModuleCategoryGroups();
+            const selectedGroup = moduleGroups.find((group) => group.normalizedPathway === AppState.selectedModulePathway);
+
+            if (!selectedGroup) {
+                navigateTo('modules');
+                return;
+            }
+
+            const screen = createElement('div', 'flex flex-col h-full overflow-y-auto');
+            screen.style.backgroundColor = '#1C1C1C';
+
+            const header = createElement('div', 'flex items-center gap-4 p-4 border-b border-[#2A2A2A]');
+            const backBtn = createElement('button', 'btn-icon');
+            backBtn.innerHTML = '<i data-lucide="arrow-left" style="width: 20px; height: 20px; color: #6BB6FF;"></i>';
+            backBtn.onclick = () => navigateTo('modules');
+
+            const titleWrap = createElement('div', '');
+            const title = createElement('h1', 'text-white');
+            title.style.cssText = 'font-size: 18px; font-weight: 700;';
+            title.textContent = selectedGroup.pathway || 'Module Category';
+
+            const subtitle = createElement('p', 'text-[#BEBEBE]');
+            subtitle.style.fontSize = '12px';
+            subtitle.textContent = `${selectedGroup.completedCount}/${selectedGroup.totalLessons} completed`;
+
+            titleWrap.appendChild(title);
+            titleWrap.appendChild(subtitle);
+            header.appendChild(backBtn);
+            header.appendChild(titleWrap);
+            screen.appendChild(header);
+
+            const content = createElement('div', `flex-1 ${isMobile ? 'px-6 py-6' : 'px-12 py-8'}`);
+
+            if (!selectedGroup.completedLessons.length) {
+                const emptyState = createElement('div', 'card p-6');
+                emptyState.style.cssText = 'background: linear-gradient(180deg, #262626 0%, #202020 100%); border: 1px solid #2E2E2E; border-radius: 1.5rem;';
+
+                const emptyTitle = createElement('p', 'text-white mb-2');
+                emptyTitle.style.fontSize = '18px';
+                emptyTitle.style.fontWeight = '700';
+                emptyTitle.textContent = 'No finished lessons here yet';
+
+                const emptyText = createElement('p', 'text-[#BEBEBE]');
+                emptyText.style.fontSize = '14px';
+                emptyText.textContent = 'Complete lessons in this category from the Dashboard, then come back here to review them.';
+
+                emptyState.appendChild(emptyTitle);
+                emptyState.appendChild(emptyText);
+                content.appendChild(emptyState);
+            } else {
+                const reviewList = createElement('div', 'space-y-4');
+
+                selectedGroup.completedLessons.forEach((lesson) => {
+                    const card = createElement('div', 'card p-5 transition-all hover:scale-[1.01] cursor-pointer');
+                    card.style.cssText = 'background: linear-gradient(180deg, #262626 0%, #202020 100%); border: 1px solid #2E2E2E; border-radius: 1.5rem;';
+
+                    const topRow = createElement('div', 'flex items-start justify-between gap-4');
+                    const info = createElement('div', 'flex-1');
+
+                    const lessonTitle = createElement('p', 'text-white mb-1');
+                    lessonTitle.style.cssText = `font-size: ${isMobile ? '17px' : '19px'}; font-weight: 700;`;
+                    lessonTitle.textContent = lesson.title || 'Completed Lesson';
+
+                    const lessonMeta = createElement('p', 'text-[#BEBEBE]');
+                    lessonMeta.style.fontSize = '13px';
+                    lessonMeta.textContent = `${lesson.difficulty || 'Lesson'} • Tap to review`;
+
+                    info.appendChild(lessonTitle);
+                    info.appendChild(lessonMeta);
+
+                    const reviewIcon = createElement('div', '');
+                    reviewIcon.innerHTML = '<i data-lucide="refresh-cw" style="width: 22px; height: 22px; color: #6BB6FF;"></i>';
+
+                    topRow.appendChild(info);
+                    topRow.appendChild(reviewIcon);
+                    card.appendChild(topRow);
+
+                    card.onclick = () => {
+                        AppState.selectedLessonId = lesson.id;
+                        AppState.selectedLessonTitle = lesson.title;
+                        navigateTo('lesson-start');
+                    };
+
+                    reviewList.appendChild(card);
+                });
+
+                content.appendChild(reviewList);
+            }
+
+            screen.appendChild(content);
+
             const spacer = createElement('div', '');
             spacer.style.height = '80px';
             screen.appendChild(spacer);
