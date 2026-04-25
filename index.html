@@ -2932,6 +2932,17 @@
             return AppState.lessonList.find(lesson => lesson.id === AppState.selectedLessonId) || null;
         }
 
+        function shuffleArray(items = []) {
+            const shuffled = [...items];
+
+            for (let index = shuffled.length - 1; index > 0; index -= 1) {
+                const randomIndex = Math.floor(Math.random() * (index + 1));
+                [shuffled[index], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[index]];
+            }
+
+            return shuffled;
+        }
+
         async function initQuizData() {
             if (!AppState.selectedLessonId) {
                 questions = [];
@@ -2940,7 +2951,7 @@
 
             const firestoreQuestions = await fetchQuestionsForLesson(AppState.selectedLessonId);
 
-            questions = firestoreQuestions.map((q) => ({
+            questions = shuffleArray(firestoreQuestions).map((q) => ({
                 question: q.question || '',
                 answer: q.answer || '',
                 choices: q.choices || [],
