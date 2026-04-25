@@ -8,6 +8,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <title>CebuLingo - Learn Cebuano</title>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="capacitor.js"></script>
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
@@ -33,10 +34,12 @@
         const contentDb = db;
 
         const googleProvider = new firebase.auth.GoogleAuthProvider();
+        const GOOGLE_SIGN_IN_CLIENT_ID = window.CEBULINGO_GOOGLE_WEB_CLIENT_ID || 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com';
         const USER_PROFILE_COLLECTION = 'users';
         const USER_ACCOUNT_COLLECTION = 'user_accounts';
         const LEADERBOARD_COLLECTION = 'leaderboard';
         window.CEBULINGO_AI_RECOMMENDER_URL = 'https://cebulingo-admin.vercel.app/api/recommendation';
+        let nativeGoogleSignInInitPromise = null;
 
     </script>
 
@@ -179,6 +182,76 @@
             return str.charAt(0).toUpperCase() + str.slice(1);
         }
 
+        function getCapacitorPlatform() {
+            const capacitor = window.Capacitor;
+            if (!capacitor || typeof capacitor.getPlatform !== 'function') {
+                return 'web';
+            }
+
+            return capacitor.getPlatform();
+        }
+
+        function isNativePlatform() {
+            return getCapacitorPlatform() !== 'web';
+        }
+
+        function getNativeGoogleSignInPlugin() {
+            return window.Capacitor?.Plugins?.GoogleSignIn || null;
+        }
+
+        async function initializeNativeGoogleSignIn() {
+            if (!isNativePlatform()) {
+                return null;
+            }
+
+            const plugin = getNativeGoogleSignInPlugin();
+            if (!plugin || typeof plugin.initialize !== 'function') {
+                throw new Error('Native Google Sign-In plugin is not available in this APK build.');
+            }
+
+            if (!GOOGLE_SIGN_IN_CLIENT_ID || GOOGLE_SIGN_IN_CLIENT_ID.includes('YOUR_WEB_CLIENT_ID')) {
+                throw new Error('Google Sign-In client ID is missing. Set window.CEBULINGO_GOOGLE_WEB_CLIENT_ID to your Web client ID.');
+            }
+
+            if (!nativeGoogleSignInInitPromise) {
+                nativeGoogleSignInInitPromise = plugin.initialize({
+                    clientId: GOOGLE_SIGN_IN_CLIENT_ID
+                });
+            }
+
+            await nativeGoogleSignInInitPromise;
+            return plugin;
+        }
+
+        function isGoogleSignInCanceled(error) {
+            const code = (error?.code || '').toString().toUpperCase();
+            const message = (error?.message || '').toString().toLowerCase();
+            return code === 'SIGN_IN_CANCELED'
+                || code === 'AUTH/POPUP-CLOSED-BY-USER'
+                || message.includes('popup-closed-by-user')
+                || message.includes('canceled')
+                || message.includes('cancelled');
+        }
+
+        async function signOutCurrentUser(redirectTo = 'login') {
+            const nativeGooglePlugin = getNativeGoogleSignInPlugin();
+
+            try {
+                if (isNativePlatform() && nativeGooglePlugin && typeof nativeGooglePlugin.signOut === 'function') {
+                    await nativeGooglePlugin.signOut();
+                }
+            } catch (error) {
+                console.warn('Native Google sign-out did not complete cleanly.', error);
+            }
+
+            await auth.signOut();
+            AppState.userData = createDefaultUserData();
+            AppState.selectedLessonId = null;
+            AppState.selectedLessonTitle = null;
+            Storage.clear('userData');
+            navigateTo(redirectTo);
+        }
+
         // Reusable Bottom Navigation helper
         function createBottomNav(activeTab) {
             const bottomNav = createElement('div', 'fixed z-30');
@@ -197,15 +270,7 @@
                     id: 'logout',
                     icon: 'log-out',
                     label: 'Logout',
-                    action: () => {
-                        auth.signOut().then(() => {
-                            AppState.userData = { name: 'Language Learner', streak: 0, totalXP: 0, currentLevel: 1, completedLessons: [] };
-                            AppState.selectedLessonId = null;
-                            AppState.selectedLessonTitle = null;
-                            Storage.clear('userData');
-                            navigateTo('login');
-                        });
-                    },
+                    action: () => signOutCurrentUser('login'),
                     isDanger: true
                 }
             ];
@@ -4580,14 +4645,37 @@
         }
 
         // Firebase Google Sign-In
-        function firebaseGoogleLogin(redirectTo = 'dashboard', resetPreferences = false) {
+        async function firebaseGoogleLogin(redirectTo = 'dashboard', resetPreferences = false) {
+            if (isNativePlatform()) {
+                try {
+                    const nativeGooglePlugin = await initializeNativeGoogleSignIn();
+                    const signInResult = await nativeGooglePlugin.signIn();
+
+                    if (!signInResult?.idToken) {
+                        throw new Error('Google Sign-In did not return an ID token.');
+                    }
+
+                    const credential = firebase.auth.GoogleAuthProvider.credential(signInResult.idToken);
+                    const authResult = await auth.signInWithCredential(credential);
+                    handleAuthSuccess(authResult.user, { redirectTo, resetPreferences });
+                    return;
+                } catch (error) {
+                    if (isGoogleSignInCanceled(error)) {
+                        return;
+                    }
+
+                    console.error('Native Google login error:', error);
+                    alert('Google login failed: ' + (error?.message || 'Unknown error.'));
+                    return;
+                }
+            }
+
             auth.signInWithPopup(googleProvider)
                 .then((result) => {
                     handleAuthSuccess(result.user, { redirectTo, resetPreferences });
                 })
                 .catch((error) => {
-                    if (error.code === 'auth/popup-closed-by-user') {
-                        // User closed popup, do nothing
+                    if (isGoogleSignInCanceled(error)) {
                         return;
                     }
                     console.error('Google login error:', error);
@@ -5166,13 +5254,7 @@
             const logoutRow = createElement('button', 'flex items-center gap-3 w-full');
             logoutRow.style.cssText = 'padding: 0.85rem 1rem; border: none; background: transparent; cursor: pointer; border-bottom: 1px solid #2A2A2A; text-align: left;';
             logoutRow.innerHTML = '<i data-lucide="log-out" style="width: 18px; height: 18px; color: #EF4444;"></i><span style="color: #EF4444; font-size: 15px; font-weight: 500;">Log Out</span>';
-            logoutRow.onclick = () => {
-                auth.signOut().then(() => {
-                    AppState.userData = createDefaultUserData();
-                    Storage.clear('userData');
-                    navigateTo('main-menu');
-                });
-            };
+            logoutRow.onclick = () => signOutCurrentUser('main-menu');
             dangerCard.appendChild(logoutRow);
 
             // Delete account
