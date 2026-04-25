@@ -150,7 +150,7 @@
         }
 
         // Loading splash screen
-        function renderLoadingSplash() {
+        function renderLoadingSplash(message = 'Preparing your lessons...') {
             const container = document.getElementById('content-container');
             container.innerHTML = '';
             const splash = createElement('div', 'flex flex-col items-center justify-center h-full');
@@ -160,6 +160,7 @@
             <div style="font-size: 64px; margin-bottom: 1rem;">\uD83D\uDC2E</div>
         </div>
         <h1 style="font-size: 32px; font-weight: 700; background: linear-gradient(135deg, #fff 0%, #6BB6FF 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">CebuLingo</h1>
+        <p style="margin-top: 0.75rem; color: #BFD7F2; font-size: 14px; font-weight: 500;">${message}</p>
         <div class="spinner" style="margin-top: 2rem;"></div>
     `;
             container.appendChild(splash);
@@ -1063,6 +1064,111 @@
             return input;
         }
 
+        function setButtonBusy(button, isBusy, busyLabel) {
+            if (!button) {
+                return;
+            }
+
+            if (!button.dataset.defaultHtml) {
+                button.dataset.defaultHtml = button.innerHTML;
+                button.dataset.defaultCursor = button.style.cursor || '';
+                button.dataset.defaultOpacity = button.style.opacity || '';
+            }
+
+            button.disabled = isBusy;
+            button.style.cursor = isBusy ? 'wait' : button.dataset.defaultCursor;
+            button.style.opacity = isBusy ? '0.75' : button.dataset.defaultOpacity;
+
+            if (isBusy) {
+                button.innerHTML = `
+                    <span style="display: inline-flex; align-items: center; justify-content: center; gap: 10px;">
+                        <span class="spinner" style="width: 18px; height: 18px; border-width: 2px;"></span>
+                        <span>${busyLabel}</span>
+                    </span>
+                `;
+            } else {
+                button.innerHTML = button.dataset.defaultHtml;
+            }
+        }
+
+        function createDashboardSkeletonSection(isMobile, index) {
+            const section = createElement('section', 'mb-12');
+
+            const header = createElement('div', 'mb-8');
+            header.style.cssText = 'background: linear-gradient(180deg, #2B2B2B 0%, #252525 100%); border: 1px solid #343434; border-radius: 1.75rem; padding: 1.25rem 1.35rem; box-shadow: 0 18px 40px rgba(0,0,0,0.18);';
+            header.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem;">
+                    <div style="flex: 1;">
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                            <div style="width: ${isMobile ? '42px' : '48px'}; height: ${isMobile ? '42px' : '48px'}; border-radius: 14px; background: linear-gradient(135deg, #394a67 0%, #5075a7 100%); opacity: 0.8;"></div>
+                            <div style="height: 24px; width: ${isMobile ? '120px' : '180px'}; border-radius: 999px; background: rgba(255,255,255,0.09);"></div>
+                        </div>
+                        <div style="height: 14px; width: 78%; border-radius: 999px; background: rgba(255,255,255,0.06);"></div>
+                    </div>
+                    <div style="min-width: ${isMobile ? '58px' : '68px'}; height: ${isMobile ? '58px' : '68px'}; border-radius: 1.25rem; background: rgba(107,182,255,0.18);"></div>
+                </div>
+            `;
+
+            const pathContainer = createElement('div', 'relative');
+            pathContainer.style.padding = isMobile ? '0.5rem 0 0.25rem' : '1rem 0 0.5rem';
+
+            const centerLine = createElement('div', '');
+            centerLine.style.cssText = 'position: absolute; top: 0; bottom: 0; left: 50%; width: 4px; transform: translateX(-50%); background: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.14) 10%, rgba(255,255,255,0.14) 90%, rgba(255,255,255,0.04) 100%); border-radius: 999px;';
+            pathContainer.appendChild(centerLine);
+
+            for (let lessonIndex = 0; lessonIndex < 3; lessonIndex += 1) {
+                const isLeft = lessonIndex % 2 === 0;
+                const row = createElement('div', `relative flex ${isLeft ? 'justify-start' : 'justify-end'}`);
+                row.style.minHeight = isMobile ? '190px' : '220px';
+                row.style.marginBottom = isMobile ? '1.5rem' : '2rem';
+
+                const card = createElement('div', 'relative flex flex-col items-center text-center');
+                card.style.width = isMobile ? '160px' : '220px';
+
+                const circle = createElement('div', '');
+                circle.style.cssText = `width: ${isMobile ? '92px' : '112px'}; height: ${isMobile ? '92px' : '112px'}; border-radius: 999px; background: linear-gradient(180deg, rgba(107,182,255,0.34) 0%, rgba(59,130,246,0.18) 100%); box-shadow: 0 18px 32px rgba(59,130,246,0.18);`;
+
+                const info = createElement('div', 'mt-4');
+                info.innerHTML = `
+                    <div style="height: 16px; width: ${isMobile ? '118px' : '160px'}; margin: 0 auto; border-radius: 999px; background: rgba(255,255,255,0.09);"></div>
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 10px;">
+                        <div style="width: 14px; height: 14px; border-radius: 50%; background: rgba(250,204,21,0.18);"></div>
+                        <div style="width: 14px; height: 14px; border-radius: 50%; background: rgba(250,204,21,0.18);"></div>
+                        <div style="width: 14px; height: 14px; border-radius: 50%; background: rgba(250,204,21,0.18);"></div>
+                    </div>
+                    <div style="height: 28px; width: 84px; margin: 12px auto 0; border-radius: 999px; background: rgba(255,255,255,0.06);"></div>
+                    <div style="height: 13px; width: 70px; margin: 12px auto 0; border-radius: 999px; background: rgba(255,255,255,0.05);"></div>
+                `;
+
+                card.appendChild(circle);
+                card.appendChild(info);
+                row.appendChild(card);
+                pathContainer.appendChild(row);
+            }
+
+            section.appendChild(header);
+            section.appendChild(pathContainer);
+            return section;
+        }
+
+        function createDashboardSkeletonContent(isMobile) {
+            const content = createElement('div', 'max-w-2xl mx-auto px-6 py-8');
+
+            const title = createElement('div', '');
+            title.style.cssText = `height: ${isMobile ? '30px' : '38px'}; width: ${isMobile ? '220px' : '280px'}; border-radius: 999px; background: rgba(255,255,255,0.12);`;
+            content.appendChild(title);
+
+            const subtitle = createElement('div', '');
+            subtitle.style.cssText = 'height: 14px; width: min(100%, 520px); margin-top: 16px; margin-bottom: 32px; border-radius: 999px; background: rgba(255,255,255,0.07);';
+            content.appendChild(subtitle);
+
+            for (let index = 0; index < 2; index += 1) {
+                content.appendChild(createDashboardSkeletonSection(isMobile, index));
+            }
+
+            return content;
+        }
+
         function normalizeValue(value) {
             return (value || '')
                 .toString()
@@ -1900,15 +2006,8 @@
         }
 
         async function renderDashboard() {
-            await fetchLessonsFromFirestore();
-
             const container = document.getElementById('content-container');
             const isMobile = AppState.isMobile;
-            const filteredLessons = getFilteredLessons();
-            const groupedLessons = getGroupedLessonsByPathway(filteredLessons);
-            const completedVisibleLessons = hasCompletedAllVisibleLessons(filteredLessons);
-            const alternativeLessonGroups = completedVisibleLessons ? getAlternativeLessonGroups(groupedLessons) : [];
-            const visiblePerformanceSummary = completedVisibleLessons ? getVisibleLessonPerformanceSummary(filteredLessons) : null;
 
             const screen = createElement('div', 'h-full overflow-y-auto relative');
             screen.style.backgroundColor = '#1C1C1C';
@@ -1923,6 +2022,32 @@
 
             header.appendChild(headerTitle);
             screen.appendChild(header);
+            const contentHost = createElement('div', '');
+            contentHost.appendChild(createDashboardSkeletonContent(isMobile));
+            screen.appendChild(contentHost);
+
+            const spacer = createElement('div', '');
+            spacer.style.height = '80px';
+            screen.appendChild(spacer);
+            screen.appendChild(createBottomNav('dashboard'));
+
+            container.appendChild(screen);
+
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+
+            await fetchLessonsFromFirestore();
+
+            if (AppState.currentScreen !== 'dashboard') {
+                return;
+            }
+
+            const filteredLessons = getFilteredLessons();
+            const groupedLessons = getGroupedLessonsByPathway(filteredLessons);
+            const completedVisibleLessons = hasCompletedAllVisibleLessons(filteredLessons);
+            const alternativeLessonGroups = completedVisibleLessons ? getAlternativeLessonGroups(groupedLessons) : [];
+            const visiblePerformanceSummary = completedVisibleLessons ? getVisibleLessonPerformanceSummary(filteredLessons) : null;
 
             const content = createElement('div', 'max-w-2xl mx-auto px-6 py-8');
 
@@ -2120,14 +2245,7 @@
                 });
             }
 
-            screen.appendChild(content);
-
-            const spacer = createElement('div', '');
-            spacer.style.height = '80px';
-            screen.appendChild(spacer);
-            screen.appendChild(createBottomNav('dashboard'));
-
-            container.appendChild(screen);
+            contentHost.replaceChildren(content);
 
             if (typeof lucide !== 'undefined') {
                 lucide.createIcons();
@@ -4541,6 +4659,7 @@
 
         function renderLogin() {
             const container = document.getElementById('content-container');
+            let isSubmitting = false;
 
             const screen = createElement('div', 'flex flex-col h-full');
             screen.style.backgroundColor = '#1C1C1C';
@@ -4582,7 +4701,50 @@
         </svg>
         <span>Login with Google</span>
     `;
-            googleBtn.onclick = () => firebaseGoogleLogin('dashboard');
+            const setLoginLoadingState = (busy, activeButton = null, label = 'Signing in...') => {
+                isSubmitting = busy;
+                setButtonBusy(googleBtn, busy && activeButton === googleBtn, label);
+                setButtonBusy(loginButton, busy && activeButton === loginButton, 'Logging in...');
+
+                if (busy) {
+                    if (activeButton !== googleBtn) {
+                        googleBtn.disabled = true;
+                        googleBtn.style.cursor = 'not-allowed';
+                        googleBtn.style.opacity = '0.55';
+                    }
+
+                    if (activeButton !== loginButton) {
+                        loginButton.disabled = true;
+                        loginButton.style.cursor = 'not-allowed';
+                        loginButton.style.opacity = '0.55';
+                    }
+                } else {
+                    googleBtn.disabled = false;
+                    googleBtn.style.cursor = 'pointer';
+                    googleBtn.style.opacity = '1';
+                    loginButton.disabled = false;
+                    loginButton.style.cursor = '';
+                    loginButton.style.opacity = '';
+                }
+            };
+
+            googleBtn.onclick = async () => {
+                if (isSubmitting) {
+                    return;
+                }
+
+                setLoginLoadingState(true, googleBtn, 'Opening Google...');
+
+                try {
+                    await firebaseGoogleLogin('dashboard');
+                } catch (error) {
+                    console.error('Unexpected Google login error:', error);
+                } finally {
+                    if (AppState.currentScreen === 'login') {
+                        setLoginLoadingState(false);
+                    }
+                }
+            };
             form.appendChild(googleBtn);
 
             // Divider
@@ -4599,7 +4761,11 @@
             const emailInput = createInput('Email or Username', 'text');
             const passwordInput = createInput('Password', 'password');
 
-            const loginButton = createButton('LOG IN', () => {
+            const loginButton = createButton('LOG IN', async () => {
+                if (isSubmitting) {
+                    return;
+                }
+
                 const email = emailInput.value;
                 const password = passwordInput.value;
 
@@ -4608,16 +4774,22 @@
                     return;
                 }
 
-                // Firebase email/password login
-                auth.signInWithEmailAndPassword(email, password)
-                    .then((result) => handleAuthSuccess(result.user, { redirectTo: 'dashboard' }))
-                    .catch((error) => {
-                        if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-                            alert('Invalid email or password. Please try again.');
-                        } else {
-                            alert('Login failed: ' + error.message);
-                        }
-                    });
+                setLoginLoadingState(true, loginButton, 'Logging in...');
+
+                try {
+                    const result = await auth.signInWithEmailAndPassword(email, password);
+                    handleAuthSuccess(result.user, { redirectTo: 'dashboard' });
+                } catch (error) {
+                    if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+                        alert('Invalid email or password. Please try again.');
+                    } else {
+                        alert('Login failed: ' + error.message);
+                    }
+                } finally {
+                    if (AppState.currentScreen === 'login') {
+                        setLoginLoadingState(false);
+                    }
+                }
             }, 'primary', true);
             loginButton.style.height = '56px';
             loginButton.style.fontSize = '16px';
@@ -4689,6 +4861,10 @@
             if (options.resetPreferences) {
                 resetLearningPreferences();
             }
+
+            renderLoadingSplash(redirectTo === 'dashboard'
+                ? 'Loading your learning path...'
+                : 'Signing you in...');
 
             hydrateAuthenticatedUser(user)
                 .then(() => navigateTo(redirectTo))
