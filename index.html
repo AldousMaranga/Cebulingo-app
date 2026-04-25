@@ -1424,8 +1424,52 @@
                 }));
         }
 
+        function getGroupedLessonsByCategory(lessons) {
+            const preferredOrder = [
+                'travel and culture',
+                'family and friends',
+                'work and business',
+                'personal interest'
+            ];
+
+            const categoryMap = new Map();
+
+            lessons.forEach((lesson) => {
+                const categoryName = lesson.category || 'General Category';
+                const normalizedCategory = normalizeCategory(categoryName) || 'general category';
+
+                if (!categoryMap.has(normalizedCategory)) {
+                    categoryMap.set(normalizedCategory, {
+                        category: categoryName,
+                        normalizedCategory,
+                        lessons: []
+                    });
+                }
+
+                categoryMap.get(normalizedCategory).lessons.push(lesson);
+            });
+
+            return [...categoryMap.values()]
+                .sort((a, b) => {
+                    const aIndex = preferredOrder.indexOf(a.normalizedCategory);
+                    const bIndex = preferredOrder.indexOf(b.normalizedCategory);
+
+                    if (aIndex === -1 && bIndex === -1) {
+                        return a.category.localeCompare(b.category);
+                    }
+
+                    if (aIndex === -1) return 1;
+                    if (bIndex === -1) return -1;
+                    return aIndex - bIndex;
+                })
+                .map(group => ({
+                    ...group,
+                    lessons: sortLessonsForPath(group.lessons)
+                }));
+        }
+
         function getModuleCategoryGroups() {
-            const groupedLessons = getGroupedLessonsByPathway(AppState.lessonList || []);
+            const groupedLessons = getGroupedLessonsByCategory(AppState.lessonList || []);
             const firstIncompleteGroupIndex = groupedLessons.findIndex((group) =>
                 Array.isArray(group.lessons) && group.lessons.some((lesson) => !isLessonCompleted(lesson))
             );
@@ -1448,6 +1492,8 @@
 
                 return {
                     ...group,
+                    pathway: group.category,
+                    normalizedPathway: group.normalizedCategory,
                     totalLessons,
                     completedLessons,
                     completedCount,
@@ -5113,7 +5159,7 @@
                 emptyState.appendChild(emptyText);
                 content.appendChild(emptyState);
             } else {
-                const modulesGrid = createElement('div', `grid ${isMobile ? 'grid-1' : 'grid-2'} gap-4`);
+                const modulesList = createElement('div', 'space-y-4');
 
                 moduleGroups.forEach((group, index) => {
                     const meta = getPathwayMeta(group.pathway || 'General Pathway', index);
@@ -5179,10 +5225,26 @@
                         };
                     }
 
-                    modulesGrid.appendChild(card);
+                    const progressContainer = createElement('div', 'mt-4');
+                    const progressBar = createElement('div', 'progress-bar');
+                    const progressFill = createElement('div', 'progress-bar-fill');
+                    progressFill.style.width = group.totalLessons
+                        ? `${(group.completedCount / group.totalLessons) * 100}%`
+                        : '0%';
+                    progressBar.appendChild(progressFill);
+
+                    const progressText = createElement('p', 'text-[#BEBEBE] mt-2');
+                    progressText.style.fontSize = '12px';
+                    progressText.textContent = `${group.completedCount}/${group.totalLessons} completed`;
+
+                    progressContainer.appendChild(progressBar);
+                    progressContainer.appendChild(progressText);
+                    card.appendChild(progressContainer);
+
+                    modulesList.appendChild(card);
                 });
 
-                content.appendChild(modulesGrid);
+                content.appendChild(modulesList);
             }
             screen.appendChild(content);
 
