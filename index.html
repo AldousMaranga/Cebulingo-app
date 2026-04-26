@@ -3250,12 +3250,14 @@
             isPhraseTypingQuestion = false,
             isPhrasePronunciationQuestion = false
         }) {
+            const correctAnswerText = correctAnswer || expectedAnswer || '';
             return {
                 questionText: question?.question || '',
                 promptText: question?.prompt || '',
-                correctAnswer: correctAnswer || expectedAnswer || '',
+                correctAnswer: correctAnswerText,
                 userAnswer: selectedChoice || userResponse || '',
                 choices: Array.isArray(question?.choices) ? question.choices : [],
+                acceptedAnswers: Array.isArray(question?.acceptedAnswers) ? question.acceptedAnswers : [],
                 isCorrect,
                 attemptsUsed: currentQuestionAttemptCount,
                 attemptsRemaining: getRemainingAttempts(),
@@ -3268,9 +3270,19 @@
                         ? (isPhraseTypingQuestion ? 'phrase_typing' : 'spelling')
                         : 'multiple_choice',
                 hasImage: Boolean(question?.imageUrl),
-                preferredHintStyle: normalizeDifficulty(question?.difficulty) === 'easy' && !isPronunciationQuestion && !isSpellingQuestion
-                    ? 'bisaya_form_hint'
-                    : 'default'
+                pronunciationGuide: question?.pronunciation || question?.pronunciationGuide || '',
+                answerWordCount: correctAnswerText ? correctAnswerText.trim().split(/\s+/).filter(Boolean).length : 0,
+                answerLetterCount: getLetterCount(correctAnswerText),
+                answerApproxSyllables: getApproxSyllableCount(correctAnswerText),
+                answerLeadingSound: getLeadingSyllableHint(correctAnswerText).replace(/^It starts with the sound\s+/i, '').replace(/\.$/, ''),
+                answerEndingSound: getEndingSoundHint(correctAnswerText).replace(/^It ends with the sound\s+/i, '').replace(/\.$/, ''),
+                preferredHintStyle: getPreferredHintStyle({
+                    question,
+                    isPronunciationQuestion,
+                    isSpellingQuestion,
+                    isPhraseTypingQuestion,
+                    isPhrasePronunciationQuestion
+                })
             };
         }
 
@@ -3601,6 +3613,52 @@
             return [lengthHint, firstLetterHint].filter(Boolean).join(' ');
         }
 
+        function getLetterCount(text) {
+            const normalized = (text || '').toString().trim();
+            const lettersOnly = normalized.replace(/[^A-Za-z]/g, '');
+            return lettersOnly ? lettersOnly.length : 0;
+        }
+
+        function getApproxSyllableCount(text) {
+            const normalized = (text || '').toString().toLowerCase().replace(/[^a-z]/g, '');
+            if (!normalized) {
+                return 0;
+            }
+
+            const groups = normalized.match(/[aeiou]+/g);
+            return Math.max(1, groups ? groups.length : 1);
+        }
+
+        function getPreferredHintStyle({
+            question,
+            isPronunciationQuestion = false,
+            isSpellingQuestion = false,
+            isPhraseTypingQuestion = false,
+            isPhrasePronunciationQuestion = false
+        }) {
+            if (isPhrasePronunciationQuestion) {
+                return 'phrase_pronunciation_form_hint';
+            }
+
+            if (isPhraseTypingQuestion) {
+                return 'phrase_spelling_form_hint';
+            }
+
+            if (isPronunciationQuestion) {
+                return 'pronunciation_form_hint';
+            }
+
+            if (isSpellingQuestion) {
+                return 'spelling_form_hint';
+            }
+
+            if (normalizeDifficulty(question?.difficulty) === 'easy') {
+                return 'bisaya_form_hint';
+            }
+
+            return 'default';
+        }
+
         function buildCoachFeedback({
             question,
             isCorrect,
@@ -3659,9 +3717,9 @@
                             `Last try on this one. The phrase was "${correctText}". Notice the pacing and word order for next time.`
                         ]
                         : [
-                            `Almost there. ${attemptPrefix} Say it a little slower and focus on the key words before your next try.`,
-                            `Close try. ${attemptPrefix} Keep the rhythm steady and stress the important words more clearly.`,
-                            `Not quite yet. ${attemptPrefix} Try again with a slower pace and cleaner phrase timing.`
+                            `Almost there. ${attemptPrefix} Say it a little slower and focus on the key words before your next try. ${answerWordCountHint}`,
+                            `Close try. ${attemptPrefix} Keep the rhythm steady and stress the important words more clearly. ${pronunciationBeatHint}`,
+                            `Not quite yet. ${attemptPrefix} Try again with a slower pace and cleaner phrase timing. ${answerWordCountHint}`
                         ]
                     : shouldRevealAnswer
                         ? [
@@ -3670,9 +3728,9 @@
                             `Last try on this one. The word was "${correctText}". Notice the syllables and pacing for next time.`
                         ]
                         : [
-                            `Almost there. ${attemptPrefix} Slow down, listen again, and focus on each syllable before repeating it. ${pronunciationBeatHint}`,
-                            `Close try. ${attemptPrefix} Try saying it more clearly one sound at a time. ${pronunciationBeatHint}`,
-                            `Not quite yet. ${attemptPrefix} Repeat it slowly and keep the middle sounds crisp. ${pronunciationBeatHint}`
+                            `Almost there. ${attemptPrefix} Slow down, listen again, and focus on each syllable before repeating it. ${leadingSyllableHint} ${pronunciationBeatHint}`.trim(),
+                            `Close try. ${attemptPrefix} Try saying it more clearly one sound at a time. ${pronunciationBeatHint} ${endingSoundHint}`.trim(),
+                            `Not quite yet. ${attemptPrefix} Repeat it slowly and keep the middle sounds crisp. ${leadingSyllableHint} ${endingSoundHint}`.trim()
                         ];
 
                 return {
@@ -3725,9 +3783,9 @@
                             `Last try on this one. The word was spelled "${correctText}".${comparisonText} Keep that spelling pattern in mind.`
                         ]
                         : [
-                            `Not quite.${comparisonText} ${attemptPrefix} Break the word into smaller sounds before typing again. ${spellingShapeHint}`,
-                            `Close.${comparisonText} ${attemptPrefix} Try typing it slowly syllable by syllable. ${spellingShapeHint}`,
-                            `Almost there.${comparisonText} ${attemptPrefix} Watch the letters that change near the end. ${spellingShapeHint}`
+                            `Not quite.${comparisonText} ${attemptPrefix} Break the word into smaller sounds before typing again. ${leadingSyllableHint} ${spellingShapeHint}`.trim(),
+                            `Close.${comparisonText} ${attemptPrefix} Try typing it slowly syllable by syllable. ${spellingShapeHint} ${endingSoundHint}`.trim(),
+                            `Almost there.${comparisonText} ${attemptPrefix} Watch the letters that change near the end. ${leadingSyllableHint} ${endingSoundHint}`.trim()
                         ];
 
                 return {

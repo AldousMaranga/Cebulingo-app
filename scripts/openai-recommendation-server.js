@@ -46,6 +46,7 @@ function buildPrompt(payload) {
         correct_answer: payload.correctAnswer || '',
         user_answer: payload.userAnswer || '',
         choices: Array.isArray(payload.choices) ? payload.choices : [],
+        accepted_answers: Array.isArray(payload.acceptedAnswers) ? payload.acceptedAnswers : [],
         is_correct: Boolean(payload.isCorrect),
         attempts_used: Number(payload.attemptsUsed || 0),
         attempts_remaining: Number(payload.attemptsRemaining || 0),
@@ -54,7 +55,13 @@ function buildPrompt(payload) {
         lesson_type: payload.lessonType || '',
         question_type: payload.questionType || '',
         has_image: Boolean(payload.hasImage),
-        preferred_hint_style: payload.preferredHintStyle || 'default'
+        preferred_hint_style: payload.preferredHintStyle || 'default',
+        pronunciation_guide: payload.pronunciationGuide || '',
+        answer_word_count: Number(payload.answerWordCount || 0),
+        answer_letter_count: Number(payload.answerLetterCount || 0),
+        answer_approx_syllables: Number(payload.answerApproxSyllables || 0),
+        answer_leading_sound: payload.answerLeadingSound || '',
+        answer_ending_sound: payload.answerEndingSound || ''
     }, null, 2);
 }
 
@@ -91,6 +98,12 @@ async function generateRecommendation(payload) {
             'If preferred_hint_style is bisaya_form_hint, do not lead with English-category or habitat clues.',
             'If preferred_hint_style is bisaya_form_hint, prefer the Bisaya answer form itself: starting sound, syllable rhythm, letter count, or ending sound.',
             'If preferred_hint_style is bisaya_form_hint and reveal_answer is false, do not give the full word directly.',
+            'If preferred_hint_style is pronunciation_form_hint, prefer syllable count, pacing, start sound, or ending sound over broad advice.',
+            'If preferred_hint_style is spelling_form_hint, prefer letter count, start sound, ending sound, or spelling pattern over meaning clues.',
+            'If preferred_hint_style is phrase_pronunciation_form_hint, prefer rhythm, number of words, pacing, and the pronunciation guide if available.',
+            'If preferred_hint_style is phrase_spelling_form_hint, prefer number of words, word order, and visible word-shape clues rather than semantic hints.',
+            'When pronunciation_guide, answer_word_count, answer_letter_count, answer_approx_syllables, answer_leading_sound, or answer_ending_sound are provided, use them to make the hint concrete.',
+            'For pronunciation and spelling hints, avoid generic lines like "try again" by themselves. Include at least one form-based clue.',
             'When reveal_answer is true, you may briefly state the correct answer because the app is about to move on.',
             'If attempts_remaining is more than 0, encourage another try.',
             'If attempts_remaining is 0, briefly close the feedback because the app will move on.',
