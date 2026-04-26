@@ -53,7 +53,8 @@ function buildPrompt(payload) {
         difficulty: payload.difficulty || '',
         lesson_type: payload.lessonType || '',
         question_type: payload.questionType || '',
-        has_image: Boolean(payload.hasImage)
+        has_image: Boolean(payload.hasImage),
+        preferred_hint_style: payload.preferredHintStyle || 'default'
     }, null, 2);
 }
 
@@ -87,6 +88,9 @@ async function generateRecommendation(payload) {
             'For pronunciation questions, prefer hints about rhythm, syllables, or saying the word more slowly.',
             'For phrase typing or phrase pronunciation, prefer hints about word order, number of words, or the main keyword in the clue.',
             'For regular multiple-choice text questions, guide the learner to the exact clue meaning, not just the category.',
+            'If preferred_hint_style is bisaya_form_hint, do not lead with English-category or habitat clues.',
+            'If preferred_hint_style is bisaya_form_hint, prefer the Bisaya answer form itself: starting sound, syllable rhythm, letter count, or ending sound.',
+            'If preferred_hint_style is bisaya_form_hint and reveal_answer is false, do not give the full word directly.',
             'When reveal_answer is true, you may briefly state the correct answer because the app is about to move on.',
             'If attempts_remaining is more than 0, encourage another try.',
             'If attempts_remaining is 0, briefly close the feedback because the app will move on.',

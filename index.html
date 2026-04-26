@@ -3267,8 +3267,20 @@
                     : isSpellingQuestion
                         ? (isPhraseTypingQuestion ? 'phrase_typing' : 'spelling')
                         : 'multiple_choice',
-                hasImage: Boolean(question?.imageUrl)
+                hasImage: Boolean(question?.imageUrl),
+                preferredHintStyle: normalizeDifficulty(question?.difficulty) === 'easy' && !isPronunciationQuestion && !isSpellingQuestion
+                    ? 'bisaya_form_hint'
+                    : 'default'
             };
+        }
+
+        function shouldPreferLocalChoiceHint(question, { isCorrect = false, isPronunciationQuestion = false, isSpellingQuestion = false, isPhraseTypingQuestion = false, isPhrasePronunciationQuestion = false } = {}) {
+            return !isCorrect &&
+                normalizeDifficulty(question?.difficulty) === 'easy' &&
+                !isPronunciationQuestion &&
+                !isSpellingQuestion &&
+                !isPhraseTypingQuestion &&
+                !isPhrasePronunciationQuestion;
         }
 
         async function requestAiCoachFeedback(context, fallbackFeedback) {
@@ -3542,6 +3554,37 @@
                 : `Listen for about ${syllables} beats as you say it.`;
         }
 
+        function getLeadingSyllableHint(text) {
+            const normalized = (text || '').toString().toLowerCase().replace(/[^a-z\s]/g, ' ').trim();
+            if (!normalized) {
+                return '';
+            }
+
+            const firstWord = normalized.split(/\s+/).find(Boolean) || '';
+            const match = firstWord.match(/^[^aeiou]*[aeiou]+/);
+            const leadingSound = match ? match[0] : firstWord.slice(0, Math.min(2, firstWord.length));
+
+            return leadingSound ? `It starts with the sound ${leadingSound.toUpperCase()}.` : '';
+        }
+
+        function getEndingSoundHint(text) {
+            const normalized = (text || '').toString().toLowerCase().replace(/[^a-z\s]/g, ' ').trim();
+            if (!normalized) {
+                return '';
+            }
+
+            const words = normalized.split(/\s+/).filter(Boolean);
+            const lastWord = words[words.length - 1] || '';
+            if (!lastWord) {
+                return '';
+            }
+
+            const match = lastWord.match(/[^aeiou]*[aeiou]+[^aeiou]*$/);
+            const endingSound = match ? match[0] : lastWord.slice(Math.max(0, lastWord.length - 2));
+
+            return endingSound ? `It ends with the sound ${endingSound.toUpperCase()}.` : '';
+        }
+
         function getSpellingShapeHint(text) {
             const normalized = (text || '').toString().trim();
             if (!normalized) {
@@ -3578,6 +3621,14 @@
             const answerWordCountHint = getWordCountHint(correctText);
             const pronunciationBeatHint = getApproxSyllableHint(correctText);
             const spellingShapeHint = getSpellingShapeHint(correctText);
+            const leadingSyllableHint = getLeadingSyllableHint(correctText);
+            const endingSoundHint = getEndingSoundHint(correctText);
+            const isEasyMultipleChoiceQuestion =
+                normalizeDifficulty(question?.difficulty) === 'easy' &&
+                !isPronunciationQuestion &&
+                !isSpellingQuestion &&
+                !isPhraseTypingQuestion &&
+                !isPhrasePronunciationQuestion;
 
             if (isPronunciationQuestion) {
                 if (isCorrect) {
@@ -3713,7 +3764,19 @@
                     ? `The correct answer was "${correctText}".`
                     : `Use the clue more carefully before your next try.`;
 
-            const warningVariants = isImageQuestion
+            const warningVariants = isEasyMultipleChoiceQuestion
+                ? shouldRevealAnswer
+                    ? [
+                        `Not quite. The answer was "${correctText}". Remember its Bisaya form: ${leadingSyllableHint} ${spellingShapeHint}`.trim(),
+                        `Good effort. The correct word was "${correctText}". Keep this sound in mind: ${pronunciationBeatHint} ${endingSoundHint}`.trim(),
+                        `Last try on this one. The answer was "${correctText}". Notice the pattern: ${leadingSyllableHint} ${endingSoundHint}`.trim()
+                    ]
+                    : [
+                        `Almost there. ${attemptPrefix} Think about the Bisaya word itself, not just the English meaning. ${leadingSyllableHint} ${pronunciationBeatHint}`.trim(),
+                        `Close. ${attemptPrefix} Use the word's sound pattern as your clue. ${spellingShapeHint} ${pronunciationBeatHint}`.trim(),
+                        `Not quite yet. ${attemptPrefix} Focus on the Bisaya spelling and pronunciation. ${leadingSyllableHint} ${spellingShapeHint}`.trim()
+                    ]
+                : isImageQuestion
                 ? shouldRevealAnswer
                     ? [
                         `Not quite. The correct answer was "${correctText}". ${contrastText}`,
@@ -4609,15 +4672,17 @@
                 correctAnswer: currentQuestion.answer
             });
             setLessonCoachFeedback(recommendation.message, recommendation.tone);
-            requestAiCoachFeedback(
-                buildAiRecommendationContext({
-                    question: currentQuestion,
-                    isCorrect,
-                    selectedChoice,
-                    correctAnswer: currentQuestion.answer
-                }),
-                recommendation
-            );
+            if (!shouldPreferLocalChoiceHint(currentQuestion, { isCorrect })) {
+                requestAiCoachFeedback(
+                    buildAiRecommendationContext({
+                        question: currentQuestion,
+                        isCorrect,
+                        selectedChoice,
+                        correctAnswer: currentQuestion.answer
+                    }),
+                    recommendation
+                );
+            }
 
             // Visual feedback
             const cards = document.querySelectorAll('.image-card');
