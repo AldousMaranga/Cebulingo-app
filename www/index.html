@@ -4318,7 +4318,7 @@
                 spellingPanel.appendChild(answerCard);
                 content.appendChild(spellingPanel);
             } else {
-                const optionsPanel = createElement('div', 'card lesson-options-panel flex-1 max-w-3xl mx-auto w-full');
+                const optionsPanel = createElement('div', 'card lesson-options-panel max-w-3xl mx-auto w-full');
                 optionsPanel.style.backgroundColor = '#232323';
                 optionsPanel.style.border = '1px solid #343434';
                 optionsPanel.style.borderRadius = '24px';
@@ -4356,12 +4356,12 @@
             }
 
             // Check button
-            const buttonContainer = createElement('div', `w-full max-w-3xl mx-auto mt-6`);
+            const buttonContainer = createElement('div', 'w-full max-w-3xl mx-auto');
             buttonContainer.style.display = 'flex';
             buttonContainer.style.flexDirection = isPronunciationQuestion ? (isMobile ? 'column' : 'row') : 'column';
             buttonContainer.style.gap = isMobile ? '10px' : '12px';
+            buttonContainer.style.marginTop = 'auto';
             if (isMobile) {
-                buttonContainer.style.marginTop = '12px';
                 buttonContainer.style.paddingBottom = 'calc(env(safe-area-inset-bottom, 0px) + 4px)';
             }
 
