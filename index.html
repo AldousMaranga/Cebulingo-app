@@ -78,7 +78,9 @@
                 wrongQuestions: [],
                 completionSummary: null,
                 preparedLessonId: null,
-                preparedQuestions: []
+                preparedQuestions: [],
+                remainingHearts: 3,
+                failedByHearts: false
             },
             lessonList: [],
             selectedLessonId: null,
@@ -843,6 +845,11 @@
             <ellipse cx="38" cy="68" rx="6" ry="14" fill="#D6B68A" transform="rotate(15 38 68)"/>
             <ellipse cx="40" cy="56" rx="7" ry="8" fill="#D6B68A"/>
         </g>`;
+            } else if (pose === 'sad') {
+                leftArm = `<g>
+            <ellipse cx="35" cy="76" rx="6" ry="16" fill="#D6B68A" transform="rotate(-25 35 76)"/>
+            <ellipse cx="30" cy="88" rx="6" ry="7" fill="#D6B68A"/>
+        </g>`;
             } else {
                 leftArm = `<g>
             <ellipse cx="35" cy="70" rx="6" ry="16" fill="#D6B68A" transform="rotate(-10 35 70)"/>
@@ -861,6 +868,11 @@
             <ellipse cx="85" cy="65" rx="6" ry="16" fill="#D6B68A" transform="rotate(20 85 65)"/>
             <ellipse cx="90" cy="52" rx="7" ry="8" fill="#D6B68A"/>
             <ellipse cx="92" cy="46" rx="3" ry="5" fill="#C9A779" transform="rotate(20 92 46)"/>
+        </g>`;
+            } else if (pose === 'sad') {
+                rightArm = `<g>
+            <ellipse cx="85" cy="76" rx="6" ry="16" fill="#D6B68A" transform="rotate(25 85 76)"/>
+            <ellipse cx="90" cy="88" rx="6" ry="7" fill="#D6B68A"/>
         </g>`;
             } else {
                 rightArm = `<g>
@@ -896,6 +908,20 @@
                 <circle cx="73" cy="39" r="5" fill="#2C2C2C"/>
                 <circle cx="71" cy="37" r="2.5" fill="#FFFFFF"/>
             </g>`;
+            } else if (pose === 'sad') {
+                eyesContent = `
+            <g ${animateClass}="animate-blink">
+                <ellipse cx="46" cy="40" rx="8" ry="9" fill="#FFFFFF"/>
+                <circle cx="47" cy="42" r="6" fill="#2C2C2C"/>
+                <circle cx="49" cy="40" r="3" fill="#FFFFFF"/>
+                <path d="M 39 35 Q 46 37 53 35" stroke="#5A4A3A" stroke-width="2" fill="none" stroke-linecap="round"/>
+            </g>
+            <g ${animateClass}="animate-blink">
+                <ellipse cx="74" cy="40" rx="8" ry="9" fill="#FFFFFF"/>
+                <circle cx="73" cy="42" r="6" fill="#2C2C2C"/>
+                <circle cx="71" cy="40" r="3" fill="#FFFFFF"/>
+                <path d="M 67 35 Q 74 37 81 35" stroke="#5A4A3A" stroke-width="2" fill="none" stroke-linecap="round"/>
+            </g>`;
             } else {
                 eyesContent = `
             <g ${animateClass}="animate-blink">
@@ -915,6 +941,8 @@
                 mouthContent = `<path d="M 48 58 Q 60 64 72 58" stroke="#5A4A3A" stroke-width="2.5" fill="none" stroke-linecap="round"/>`;
             } else if (pose === 'thinking') {
                 mouthContent = `<path d="M 50 58 Q 56 60 62 58" stroke="#5A4A3A" stroke-width="2" fill="none" stroke-linecap="round"/>`;
+            } else if (pose === 'sad') {
+                mouthContent = `<path d="M 48 62 Q 60 54 72 62" stroke="#5A4A3A" stroke-width="2.5" fill="none" stroke-linecap="round"/>`;
             } else {
                 mouthContent = `<path d="M 48 58 Q 60 62 72 58" stroke="#5A4A3A" stroke-width="2.5" fill="none" stroke-linecap="round"/>`;
             }
@@ -931,6 +959,10 @@
             <path d="M 10,20 Q 10,15 14,15 Q 18,15 18,20 Q 18,25 10,30 Q 2,25 2,20 Q 2,15 6,15 Q 10,15 10,20" fill="#FF6B9D" opacity="0.7"/>
             <path d="M 108,25 Q 108,21 111,21 Q 114,21 114,25 Q 114,28 108,32 Q 102,28 102,25 Q 102,21 105,21 Q 108,21 108,25" fill="#FF6B9D" opacity="0.7"/>
         </g>`;
+            } else if (pose === 'sad') {
+                extraElements = `
+            <path d="M 30 54 C 28 58 28 63 31 66" stroke="#7CC8FF" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+            <ellipse cx="31" cy="68" rx="2.5" ry="4.5" fill="#7CC8FF" opacity="0.8"/>`;
             }
 
             return `
@@ -1696,7 +1728,7 @@
         function buildLessonCompletionSummary() {
             const totalQuestions = questions.length || AppState.lessonData.totalQuestions || 0;
             const percentageScore = calculateLessonPercentage(score, totalQuestions);
-            const passed = percentageScore >= 50;
+            const passed = !AppState.lessonData.failedByHearts;
             const xpAwarded = calculateLessonXpAward(percentageScore);
             const starsEarned = getStarsForPercentage(percentageScore);
 
@@ -2849,14 +2881,12 @@
             const title = createElement('h1', 'text-white mb-2');
             title.style.fontSize = isMobile ? '36px' : '48px';
             title.style.fontWeight = '700';
-            title.textContent = summary.passed ? 'Lesson Complete!' : 'Retake Needed';
+            title.textContent = 'Lesson Complete!';
 
             // Score
             const scoreText = createElement('p', 'text-[#BEBEBE] mb-4');
             scoreText.style.fontSize = isMobile ? '18px' : '22px';
-            scoreText.textContent = summary.passed
-                ? `You scored ${summary.percentageScore}% and earned ${summary.xpAwarded} XP.`
-                : `You scored ${summary.percentageScore}%. Reach at least 50% to complete this lesson.`;
+            scoreText.textContent = `You scored ${summary.percentageScore}% and earned ${summary.xpAwarded} XP.`;
 
             content.appendChild(title);
             content.appendChild(scoreText);
@@ -2872,22 +2902,9 @@
 
             // Button
             const buttonContainer = createElement('div', `w-full max-w-md mx-auto space-y-3`);
-            const primaryBtn = createButton(summary.passed ? 'CONTINUE' : 'RETAKE LESSON', () => {
-                if (summary.passed) {
-                    navigateTo('dashboard');
-                    return;
-                }
-
-                navigateTo('lesson-reviewer');
-            }, 'primary', true);
+            const primaryBtn = createButton('CONTINUE', () => navigateTo('dashboard'), 'primary', true);
             primaryBtn.style.height = isMobile ? '56px' : '64px';
             buttonContainer.appendChild(primaryBtn);
-
-            if (!summary.passed) {
-                const secondaryBtn = createButton('BACK TO DASHBOARD', () => navigateTo('dashboard'), 'secondary', true);
-                secondaryBtn.style.height = isMobile ? '48px' : '56px';
-                buttonContainer.appendChild(secondaryBtn);
-            }
 
             content.appendChild(buttonContainer);
 
@@ -2919,6 +2936,7 @@
         let dashboardPathSuggestion = null;
         let dashboardSuggestionRequestToken = 0;
         const MAX_QUESTION_ATTEMPTS = 3;
+        const MAX_QUIZ_HEARTS = 3;
 
         function getSelectedLesson() {
             if (!AppState.selectedLessonId) {
@@ -3094,6 +3112,8 @@
             AppState.lessonData.currentScore = 0;
             AppState.lessonData.wrongQuestions = [];
             AppState.lessonData.completionSummary = null;
+            AppState.lessonData.remainingHearts = MAX_QUIZ_HEARTS;
+            AppState.lessonData.failedByHearts = false;
         }
 
         // function renderLessonGameplay() {
@@ -3125,6 +3145,16 @@
             return Math.max(0, MAX_QUESTION_ATTEMPTS - currentQuestionAttemptCount);
         }
 
+        function getRemainingHearts() {
+            return Math.max(0, Number(AppState.lessonData.remainingHearts) || 0);
+        }
+
+        function loseQuizHeart() {
+            const nextHeartCount = Math.max(0, getRemainingHearts() - 1);
+            AppState.lessonData.remainingHearts = nextHeartCount;
+            return nextHeartCount;
+        }
+
         function getAttemptMessagePrefix() {
             const remainingAttempts = getRemainingAttempts();
 
@@ -3145,7 +3175,7 @@
                 return;
             }
 
-            attemptText.textContent = `Attempts: ${Math.min(currentQuestionAttemptCount + 1, MAX_QUESTION_ATTEMPTS)} / ${MAX_QUESTION_ATTEMPTS}`;
+            attemptText.textContent = `Tries for this word: ${Math.min(currentQuestionAttemptCount + 1, MAX_QUESTION_ATTEMPTS)} / ${MAX_QUESTION_ATTEMPTS}`;
         }
 
         function moveToNextQuestion() {
@@ -3176,6 +3206,13 @@
             AppState.lessonData.wrongQuestions = wrongQuestions;
         }
 
+        function failCurrentLesson() {
+            coachRequestToken++;
+            AppState.lessonData.failedByHearts = true;
+            AppState.lessonData.completionSummary = null;
+            navigateTo('lesson-failed');
+        }
+
         function handleCorrectAttempt() {
             SoundEffects.playCorrect();
             score++;
@@ -3195,7 +3232,20 @@
 
             if (currentQuestionAttemptCount >= MAX_QUESTION_ATTEMPTS) {
                 registerQuestionMiss(question, details);
+                const heartsLeft = loseQuizHeart();
+                const heartLabel = heartsLeft === 1 ? 'heart' : 'hearts';
+                setLessonCoachFeedback(
+                    heartsLeft > 0
+                        ? `You lost a heart on this item. ${heartsLeft} ${heartLabel} left.`
+                        : 'You ran out of hearts. This lesson will restart so you can try again.',
+                    'error'
+                );
                 setTimeout(() => {
+                    if (heartsLeft <= 0) {
+                        failCurrentLesson();
+                        return;
+                    }
+
                     moveToNextQuestion();
                 }, finalDelay);
                 return;
@@ -4361,8 +4411,24 @@
             progressBar.appendChild(progressFill);
             progressContainer.appendChild(progressBar);
 
+            const heartsValue = createElement('div', 'flex items-center gap-1');
+            heartsValue.id = 'question-heart-indicator';
+            heartsValue.style.marginLeft = '0.5rem';
+            heartsValue.style.minWidth = 'fit-content';
+
+            for (let heartIndex = 0; heartIndex < MAX_QUIZ_HEARTS; heartIndex++) {
+                const heart = createElement('span', '');
+                const isHeartActive = heartIndex < getRemainingHearts();
+                heart.textContent = isHeartActive ? '❤' : '♡';
+                heart.style.fontSize = isMobile ? '16px' : '18px';
+                heart.style.lineHeight = '1';
+                heart.style.color = isHeartActive ? '#FF6B6B' : '#6B7280';
+                heartsValue.appendChild(heart);
+            }
+
             header.appendChild(closeBtn);
             header.appendChild(progressContainer);
+            header.appendChild(heartsValue);
             screen.appendChild(header);
 
             // Question content
@@ -4437,7 +4503,7 @@
             attemptText.style.fontSize = isMobile ? '12px' : '13px';
             attemptText.style.color = '#8AB4FF';
             attemptText.style.fontWeight = '600';
-            attemptText.textContent = `Attempts: ${Math.min(currentQuestionAttemptCount + 1, MAX_QUESTION_ATTEMPTS)} / ${MAX_QUESTION_ATTEMPTS}`;
+            attemptText.textContent = `Tries for this word: ${Math.min(currentQuestionAttemptCount + 1, MAX_QUESTION_ATTEMPTS)} / ${MAX_QUESTION_ATTEMPTS}`;
             questionText.appendChild(attemptText);
 
             if ((isPronunciationQuestion || isSpellingQuestion) && !isPhraseTypingQuestion && !isPhrasePronunciationQuestion && pronunciationGuide) {
@@ -5001,6 +5067,71 @@
                 errorText.textContent = 'We could not load the sample words for this lesson.';
                 cardsContainer.appendChild(errorText);
             }
+
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        }
+
+        function renderLessonFailed() {
+            const container = document.getElementById('content-container');
+            const isMobile = AppState.isMobile;
+
+            const screen = createElement('div', 'flex flex-col h-full relative');
+            screen.style.background = 'radial-gradient(ellipse at 50% 20%, #1a2332 0%, #141a23 40%, #0d1117 100%)';
+            screen.style.overflow = 'hidden';
+
+            const bgGlow = createElement('div', 'absolute');
+            bgGlow.style.cssText = 'top: -50%; left: 50%; transform: translateX(-50%); width: 300px; height: 300px; background: radial-gradient(circle, rgba(26,115,232,0.15) 0%, transparent 70%); border-radius: 50%; pointer-events: none; animation: float 6s ease-in-out infinite;';
+            screen.appendChild(bgGlow);
+            screen.appendChild(createSparkleEffect());
+
+            const content = createElement('div', 'flex-1 flex flex-col items-center justify-center z-10 text-center');
+            content.style.padding = isMobile ? '2rem 1.5rem' : '3rem 2rem';
+
+            const cowWrapper = createElement('div', 'animate-float relative');
+            const cowGlow = createElement('div', 'absolute');
+            cowGlow.style.cssText = 'bottom: -10px; left: 50%; transform: translateX(-50%); width: 120px; height: 20px; background: radial-gradient(ellipse, rgba(26,115,232,0.2) 0%, transparent 70%); border-radius: 50%;';
+            cowWrapper.appendChild(createCowMascot(isMobile ? 150 : 180, true, 'sad'));
+            cowWrapper.appendChild(cowGlow);
+            content.appendChild(cowWrapper);
+
+            const title = createElement('h1', 'text-white');
+            title.style.cssText = `font-size: ${isMobile ? '34px' : '42px'}; font-weight: 700; letter-spacing: -1px; margin-top: 1.25rem;`;
+            title.textContent = 'Out of Hearts';
+
+            const subtitle = createElement('p', '');
+            subtitle.style.cssText = `max-width: ${isMobile ? '320px' : '440px'}; font-size: ${isMobile ? '15px' : '18px'}; color: #BFD7F2; line-height: 1.6; margin-top: 0.85rem;`;
+            subtitle.textContent = 'You failed this lesson for now. Please try the lesson again before retaking the quiz.';
+
+            const heartText = createElement('p', '');
+            heartText.style.cssText = 'font-size: 14px; font-weight: 600; color: #FCA5A5; margin-top: 0.85rem;';
+            heartText.textContent = 'All 3 hearts were used up.';
+
+            const buttonContainer = createElement('div', 'w-full max-w-md mx-auto space-y-3 mt-8');
+
+            const retryBtn = createButton('TRY THE LESSON AGAIN', () => {
+                resetPreparedLessonQuestions();
+                navigateTo('lesson-reviewer');
+            }, 'primary', true);
+            retryBtn.style.height = isMobile ? '56px' : '64px';
+
+            const dashboardBtn = createButton('BACK TO DASHBOARD', () => {
+                resetPreparedLessonQuestions();
+                navigateTo('dashboard');
+            }, 'secondary', true);
+            dashboardBtn.style.height = isMobile ? '48px' : '56px';
+
+            buttonContainer.appendChild(retryBtn);
+            buttonContainer.appendChild(dashboardBtn);
+
+            content.appendChild(title);
+            content.appendChild(subtitle);
+            content.appendChild(heartText);
+            content.appendChild(buttonContainer);
+
+            screen.appendChild(content);
+            container.appendChild(screen);
 
             if (typeof lucide !== 'undefined') {
                 lucide.createIcons();
