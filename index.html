@@ -266,27 +266,20 @@
             bottomNav.id = 'bottom-nav-bar';
             bottomNav.style.cssText = 'position: fixed; z-index: 100; bottom: 0; left: 0; right: 0; padding: 0.5rem 1rem; padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));';
 
-            const navBar = createElement('div', 'flex items-center justify-around');
-            navBar.style.cssText = 'background: rgba(22,22,22,0.92); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-radius: 1.25rem; padding: 0.5rem 0.25rem; border: 1px solid rgba(255,255,255,0.06); box-shadow: 0 -4px 20px rgba(0,0,0,0.3);';
+            const navBar = createElement('div', 'flex items-center');
+            navBar.style.cssText = 'display: flex; align-items: center; justify-content: center; background: rgba(22,22,22,0.92); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-radius: 1.25rem; padding: 0.5rem 0.25rem; border: 1px solid rgba(255,255,255,0.06); box-shadow: 0 -4px 20px rgba(0,0,0,0.3);';
 
             const navItems = [
                 { id: 'dashboard', icon: 'layout-dashboard', label: 'Dashboard', action: () => navigateTo('dashboard') },
                 { id: 'leaderboard', icon: 'trophy', label: 'Ranks', action: () => navigateTo('leaderboard') },
                 { id: 'modules', icon: 'book-open', label: 'Modules', action: () => navigateTo('modules') },
-                { id: 'profile', icon: 'user', label: 'Profile', action: () => navigateTo('profile') },
-                {
-                    id: 'logout',
-                    icon: 'log-out',
-                    label: 'Logout',
-                    action: () => signOutCurrentUser('login'),
-                    isDanger: true
-                }
+                { id: 'profile', icon: 'user', label: 'Profile', action: () => navigateTo('profile') }
             ];
 
             navItems.forEach(item => {
                 const isActive = item.id === activeTab;
                 const navBtn = createElement('button', 'flex flex-col items-center gap-1');
-                navBtn.style.cssText = `border: none; cursor: pointer; padding: 0.45rem 0.85rem; border-radius: 0.75rem; background: ${isActive ? 'linear-gradient(135deg, #1A73E8 0%, #4DACFF 100%)' : 'transparent'}; transition: all 0.2s ease;`;
+                navBtn.style.cssText = `flex: 1 1 0; min-width: 0; border: none; cursor: pointer; padding: 0.45rem 0.25rem; border-radius: 0.75rem; background: ${isActive ? 'linear-gradient(135deg, #1A73E8 0%, #4DACFF 100%)' : 'transparent'}; transition: all 0.2s ease;`;
                 navBtn.innerHTML = `
             <i data-lucide="${item.icon}" style="width: 20px; height: 20px; color: ${item.isDanger ? '#EF4444' : isActive ? 'white' : '#8899aa'};"></i>
             <span style="font-size: 10px; color: ${item.isDanger ? '#EF4444' : isActive ? 'white' : '#8899aa'}; font-weight: 500;">${item.label}</span>
@@ -5067,6 +5060,10 @@
 
             content.appendChild(form);
             screen.appendChild(content);
+            const spacer = createElement('div', '');
+            spacer.style.height = '80px';
+            screen.appendChild(spacer);
+            screen.appendChild(createBottomNav(null));
             container.appendChild(screen);
 
             if (typeof lucide !== 'undefined') {
@@ -5207,8 +5204,8 @@
             bottomSection.appendChild(buttonsContainer);
 
             // Bottom Nav Bar
-            const navBar = createElement('div', 'flex items-center justify-around');
-            navBar.style.cssText = 'background: rgba(30,30,30,0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-radius: 1rem; padding: 0.6rem 0.5rem; border: 1px solid rgba(255,255,255,0.06);';
+            const navBar = createElement('div', 'flex items-center');
+            navBar.style.cssText = 'display: flex; align-items: center; justify-content: center; background: rgba(30,30,30,0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-radius: 1rem; padding: 0.6rem 0.5rem; border: 1px solid rgba(255,255,255,0.06);';
 
             const navItems = [
                 { icon: 'layout-dashboard', label: 'Dashboard', action: () => navigateTo('dashboard'), primary: true },
@@ -5219,7 +5216,7 @@
 
             navItems.forEach(item => {
                 const navBtn = createElement('button', 'flex flex-col items-center gap-1 transition-all');
-                navBtn.style.cssText = `border: none; cursor: pointer; padding: 0.5rem 0.85rem; border-radius: 0.75rem; background: ${item.primary ? 'linear-gradient(135deg, #1A73E8 0%, #4DACFF 100%)' : 'transparent'};`;
+                navBtn.style.cssText = `flex: 1 1 0; min-width: 0; border: none; cursor: pointer; padding: 0.5rem 0.25rem; border-radius: 0.75rem; background: ${item.primary ? 'linear-gradient(135deg, #1A73E8 0%, #4DACFF 100%)' : 'transparent'};`;
                 navBtn.innerHTML = `
             <i data-lucide="${item.icon}" style="width: 20px; height: 20px; color: ${item.primary ? 'white' : '#8899aa'};"></i>
             <span style="font-size: 10px; color: ${item.primary ? 'white' : '#8899aa'}; font-weight: 500;">${item.label}</span>
@@ -6197,6 +6194,10 @@
 
             content.appendChild(form);
             screen.appendChild(content);
+            const spacer = createElement('div', '');
+            spacer.style.height = '80px';
+            screen.appendChild(spacer);
+            screen.appendChild(createBottomNav(null));
             container.appendChild(screen);
 
             if (typeof lucide !== 'undefined') {
