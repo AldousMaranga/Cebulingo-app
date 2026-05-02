@@ -1333,6 +1333,31 @@
                 : [levels[currentIndex]];
         }
 
+        function getOrderedDifficultyLevels() {
+            return ['easy', 'intermediate', 'hard'];
+        }
+
+        function getDifficultyRank(value) {
+            const normalized = normalizeDifficulty(value);
+            const difficultyLevels = getOrderedDifficultyLevels();
+            const difficultyIndex = difficultyLevels.indexOf(normalized);
+            return difficultyIndex === -1 ? 0 : difficultyIndex;
+        }
+
+        function getProficiencyForDifficulty(difficulty) {
+            const normalized = normalizeDifficulty(difficulty);
+
+            if (normalized === 'hard') {
+                return 'Advanced';
+            }
+
+            if (normalized === 'intermediate') {
+                return 'Intermediate';
+            }
+
+            return 'Complete Beginner';
+        }
+
         function getFilteredLessons() {
             const selectedCategory = normalizeCategory(AppState.learningPreferences.category);
             const selectedDifficulty = getDifficultyForProficiency(AppState.learningPreferences.proficiency);
@@ -2210,7 +2235,10 @@
             const filteredLessons = getFilteredLessons();
             const groupedLessons = getGroupedLessonsByPathway(filteredLessons);
             const completedVisibleLessons = hasCompletedAllVisibleLessons(filteredLessons);
-            const alternativeLessonGroups = completedVisibleLessons ? getAlternativeLessonGroups(groupedLessons) : [];
+            const nextDifficultyGroup = completedVisibleLessons ? getNextDifficultyRecommendation() : null;
+            const alternativeLessonGroups = completedVisibleLessons && !nextDifficultyGroup
+                ? getAlternativeCategoryGroups(normalizeCategory(AppState.learningPreferences.category))
+                : [];
             const visiblePerformanceSummary = completedVisibleLessons ? getVisibleLessonPerformanceSummary(filteredLessons) : null;
 
             const content = createElement('div', 'max-w-2xl mx-auto px-6 py-8');
@@ -2225,7 +2253,7 @@
             subtitle.textContent = 'Lessons are organized by pathway so the learning path feels clearer and easier to follow.';
             content.appendChild(subtitle);
 
-            if (completedVisibleLessons && alternativeLessonGroups.length) {
+            if (completedVisibleLessons && (nextDifficultyGroup || alternativeLessonGroups.length)) {
                 const suggestionCard = createElement('div', 'mb-8');
                 suggestionCard.id = 'dashboard-path-suggestion-card';
                 suggestionCard.style.cssText = 'display: none; border: 1px solid rgba(107,182,255,0.24); border-radius: 1.6rem; padding: 1.2rem 1.25rem; background: linear-gradient(180deg, rgba(33,41,60,0.96) 0%, rgba(27,34,50,0.96) 100%); box-shadow: 0 18px 40px rgba(16,24,40,0.24);';
@@ -2239,7 +2267,10 @@
                 suggestionText.style.cssText = `font-size: ${isMobile ? '14px' : '15px'}; line-height: 1.6; color: #EAF4FF;`;
 
                 const suggestionAction = createButton('GO TO RECOMMENDED PATH', () => {
-                    applyDashboardPathSuggestion(alternativeLessonGroups);
+                    applyDashboardPathSuggestion({
+                        nextDifficultyGroup,
+                        alternativeGroups: alternativeLessonGroups
+                    });
                 }, 'secondary', true);
                 suggestionAction.style.marginTop = '1rem';
 
@@ -2248,11 +2279,14 @@
                 suggestionCard.appendChild(suggestionAction);
                 content.appendChild(suggestionCard);
 
-                const fallbackSuggestion = buildDashboardPathSuggestionFallback(alternativeLessonGroups, visiblePerformanceSummary || {});
+                const fallbackSuggestion = buildDashboardPathSuggestionFallback({
+                    nextDifficultyGroup,
+                    alternativeGroups: alternativeLessonGroups
+                });
                 if (fallbackSuggestion) {
                     setDashboardPathSuggestion(fallbackSuggestion.message, fallbackSuggestion.tone, fallbackSuggestion);
                     requestDashboardPathSuggestion(
-                        buildDashboardPathSuggestionContext(groupedLessons, alternativeLessonGroups, filteredLessons),
+                        buildDashboardPathSuggestionContext(groupedLessons, alternativeLessonGroups, filteredLessons, nextDifficultyGroup),
                         fallbackSuggestion
                     );
                 }
@@ -3534,13 +3568,47 @@
             return Array.isArray(lessons) && lessons.length > 0 && lessons.every(lesson => isLessonCompleted(lesson));
         }
 
-        function getAlternativeLessonGroups(visibleGroups = []) {
-            const visiblePathways = new Set((visibleGroups || []).map(group => group.normalizedPathway));
+        function getNextDifficultyRecommendation() {
+            const selectedCategory = normalizeCategory(AppState.learningPreferences.category);
+            const selectedDifficulty = getDifficultyForProficiency(AppState.learningPreferences.proficiency);
 
-            return getGroupedLessonsByPathway(AppState.lessonList || []).filter(group =>
-                !visiblePathways.has(group.normalizedPathway) &&
+            if (!selectedCategory || !selectedDifficulty) {
+                return null;
+            }
+
+            const difficultyLevels = getOrderedDifficultyLevels();
+            const currentDifficultyRank = getDifficultyRank(selectedDifficulty);
+            const categoryLessons = (AppState.lessonList || []).filter((lesson) =>
+                normalizeCategory(lesson.category) === selectedCategory
+            );
+
+            for (let difficultyRank = currentDifficultyRank + 1; difficultyRank < difficultyLevels.length; difficultyRank += 1) {
+                const targetDifficulty = difficultyLevels[difficultyRank];
+                const targetLessons = sortLessonsForPath(categoryLessons.filter((lesson) =>
+                    normalizeDifficulty(lesson.difficulty) === targetDifficulty
+                ));
+
+                if (!targetLessons.length || targetLessons.every((lesson) => isLessonCompleted(lesson))) {
+                    continue;
+                }
+
+                return {
+                    category: targetLessons[0]?.category || AppState.learningPreferences.category || 'General Category',
+                    normalizedCategory: selectedCategory,
+                    difficulty: targetDifficulty,
+                    recommendedProficiency: getProficiencyForDifficulty(targetDifficulty),
+                    lessons: targetLessons
+                };
+            }
+
+            return null;
+        }
+
+        function getAlternativeCategoryGroups(excludedNormalizedCategory = '') {
+            return getGroupedLessonsByCategory(AppState.lessonList || []).filter((group) =>
+                group.normalizedCategory !== excludedNormalizedCategory &&
                 Array.isArray(group.lessons) &&
-                group.lessons.some(lesson => !isLessonCompleted(lesson))
+                group.lessons.some((lesson) => !isLessonCompleted(lesson))
             );
         }
 
@@ -3573,7 +3641,18 @@
             };
         }
 
-        function buildDashboardPathSuggestionFallback(alternativeGroups = [], performanceSummary = {}) {
+        function buildDashboardPathSuggestionFallback({ nextDifficultyGroup = null, alternativeGroups = [] } = {}) {
+            if (nextDifficultyGroup) {
+                const starterLesson = nextDifficultyGroup.lessons.find((lesson) => !isLessonCompleted(lesson)) || nextDifficultyGroup.lessons[0];
+                const starterLessonText = starterLesson?.title ? ` Start with ${starterLesson.title}.` : '';
+                return {
+                    message: `You completed your current lessons in ${formatDisplayName(nextDifficultyGroup.category, 'this category')}. Next, clear the ${formatDisplayName(nextDifficultyGroup.difficulty, 'next')} difficulty here before moving to a new category.${starterLessonText}`,
+                    tone: 'success',
+                    recommendedPathway: nextDifficultyGroup.category,
+                    recommendedProficiency: nextDifficultyGroup.recommendedProficiency
+                };
+            }
+
             if (!alternativeGroups.length) {
                 return null;
             }
@@ -3581,22 +3660,16 @@
             const nextGroup = alternativeGroups[0];
             const starterLesson = nextGroup.lessons.find(lesson => !isLessonCompleted(lesson)) || nextGroup.lessons[0];
             const starterLessonText = starterLesson?.title ? ` Start with ${starterLesson.title}.` : '';
-            const proficiencyOptions = getRecommendedProficiencyOptions(AppState.learningPreferences.proficiency);
-            const shouldPromoteDifficulty = proficiencyOptions.length > 1 && Number(performanceSummary.averagePercentage || 0) >= 85;
-            const recommendedProficiency = shouldPromoteDifficulty ? proficiencyOptions[1] : (proficiencyOptions[0] || AppState.learningPreferences.proficiency || '');
-            const promotionText = shouldPromoteDifficulty
-                ? ` You look ready to move up to ${recommendedProficiency}.`
-                : '';
 
             return {
-                message: `You completed this dashboard path. Try ${nextGroup.pathway} next for a different Cebuano context and fresh vocabulary.${promotionText}${starterLessonText}`,
+                message: `You cleared the higher difficulties in ${formatDisplayName(AppState.learningPreferences.category, 'your current category')}. Try ${formatDisplayName(nextGroup.category, 'the next category')} next for fresh Cebuano vocabulary and situations.${starterLessonText}`,
                 tone: 'info',
-                recommendedPathway: nextGroup.pathway,
-                recommendedProficiency
+                recommendedPathway: nextGroup.category,
+                recommendedProficiency: AppState.learningPreferences.proficiency || ''
             };
         }
 
-        function buildDashboardPathSuggestionContext(visibleGroups, alternativeGroups, filteredLessons) {
+        function buildDashboardPathSuggestionContext(visibleGroups, alternativeGroups, filteredLessons, nextDifficultyGroup = null) {
             const performanceSummary = getVisibleLessonPerformanceSummary(filteredLessons);
             return {
                 task: 'dashboard_pathway_suggestion',
@@ -3610,12 +3683,19 @@
                 completedPathways: (visibleGroups || [])
                     .filter(group => Array.isArray(group.lessons) && group.lessons.length && group.lessons.every(lesson => isLessonCompleted(lesson)))
                     .map(group => group.pathway),
+                nextDifficultyRecommendation: nextDifficultyGroup ? {
+                    category: nextDifficultyGroup.category,
+                    difficulty: nextDifficultyGroup.difficulty,
+                    recommendedProficiency: nextDifficultyGroup.recommendedProficiency,
+                    lessonCount: Array.isArray(nextDifficultyGroup.lessons) ? nextDifficultyGroup.lessons.length : 0,
+                    starterLessonTitle: nextDifficultyGroup.lessons.find((lesson) => !isLessonCompleted(lesson))?.title || nextDifficultyGroup.lessons[0]?.title || ''
+                } : null,
                 recommendedProficiencyOptions: getRecommendedProficiencyOptions(AppState.learningPreferences.proficiency),
                 availableAlternativePathways: (alternativeGroups || []).slice(0, 4).map(group => {
                     const starterLesson = group.lessons.find(lesson => !isLessonCompleted(lesson)) || group.lessons[0] || {};
                     return {
-                        pathway: group.pathway,
-                        description: getPathwayMeta(group.pathway).description,
+                        pathway: group.category,
+                        description: getPathwayMeta(group.category).description,
                         starterLessonTitle: starterLesson.title || '',
                         lessonCount: Array.isArray(group.lessons) ? group.lessons.length : 0
                     };
@@ -3667,9 +3747,16 @@
             text.textContent = message;
         }
 
-        function applyDashboardPathSuggestion(alternativeGroups = []) {
+        function applyDashboardPathSuggestion({ nextDifficultyGroup = null, alternativeGroups = [] } = {}) {
+            if (nextDifficultyGroup) {
+                setLearningPreference('category', nextDifficultyGroup.category);
+                setLearningPreference('proficiency', nextDifficultyGroup.recommendedProficiency);
+                navigateTo('dashboard');
+                return;
+            }
+
             const suggestion = dashboardPathSuggestion || {};
-            const matchingGroup = (alternativeGroups || []).find(group => normalizeValue(group.pathway) === normalizeValue(suggestion.recommendedPathway))
+            const matchingGroup = (alternativeGroups || []).find(group => normalizeValue(group.category) === normalizeValue(suggestion.recommendedPathway))
                 || alternativeGroups[0];
 
             if (!matchingGroup) {
@@ -3678,7 +3765,7 @@
             }
 
             const starterLesson = matchingGroup.lessons.find(lesson => !isLessonCompleted(lesson)) || matchingGroup.lessons[0] || {};
-            const targetCategory = starterLesson.category || starterLesson.pathway || matchingGroup.pathway || AppState.learningPreferences.category;
+            const targetCategory = starterLesson.category || starterLesson.pathway || matchingGroup.category || AppState.learningPreferences.category;
             const proficiencyOptions = getRecommendedProficiencyOptions(AppState.learningPreferences.proficiency);
             const targetProficiency = suggestion.recommendedProficiency && proficiencyOptions.some(option => normalizeValue(option) === normalizeValue(suggestion.recommendedProficiency))
                 ? suggestion.recommendedProficiency
@@ -5578,6 +5665,8 @@
 
                 moduleGroups.forEach((group, index) => {
                     const meta = getPathwayMeta(group.pathway || 'General Pathway', index);
+                    const isCurrentPreferenceCategory = normalizeCategory(group.category) === normalizeCategory(AppState.learningPreferences.category);
+                    const hasExpandedDifficultyAccess = isCurrentPreferenceCategory && getDifficultyRank(getDifficultyForProficiency(AppState.learningPreferences.proficiency)) > 0;
                     const card = createElement('div', `card p-6 transition-all ${group.isUnlocked ? 'hover:scale-[1.02] cursor-pointer' : ''}`);
                     card.style.cssText = `background: linear-gradient(180deg, #262626 0%, #202020 100%); border: 1px solid ${group.isUnlocked ? '#2E2E2E' : '#252525'}; border-radius: 1.5rem; opacity: ${group.isUnlocked ? '1' : '0.48'};`;
 
@@ -5622,6 +5711,8 @@
                     reviewText.style.fontSize = '13px';
                     if (!group.isUnlocked) {
                         reviewText.textContent = 'Locked until you finish the earlier categories.';
+                    } else if (hasExpandedDifficultyAccess) {
+                        reviewText.textContent = 'Tap to open this category across your unlocked difficulties.';
                     } else if (group.isCurrent) {
                         reviewText.textContent = 'Current category. Tap to view the lessons you have finished so far.';
                     } else if (group.isNext) {
@@ -5722,8 +5813,14 @@
 
             const content = createElement('div', `flex-1 ${isMobile ? 'px-6 py-6' : 'px-12 py-8'}`);
             content.style.paddingBottom = 'calc(120px + env(safe-area-inset-bottom, 0px))';
+            const isCurrentPreferenceCategory = normalizeCategory(selectedGroup.category) === normalizeCategory(AppState.learningPreferences.category);
+            const currentDifficultyRank = getDifficultyRank(getDifficultyForProficiency(AppState.learningPreferences.proficiency));
+            const moduleLessons = isCurrentPreferenceCategory && currentDifficultyRank > 0
+                ? sortLessonsForPath((selectedGroup.lessons || []).filter((lesson) => getDifficultyRank(lesson.difficulty) <= currentDifficultyRank))
+                : selectedGroup.completedLessons;
+            const showingExpandedDifficultyAccess = isCurrentPreferenceCategory && currentDifficultyRank > 0;
 
-            if (!selectedGroup.completedLessons.length) {
+            if (!moduleLessons.length) {
                 const emptyState = createElement('div', 'card p-6');
                 emptyState.style.cssText = 'background: linear-gradient(180deg, #262626 0%, #202020 100%); border: 1px solid #2E2E2E; border-radius: 1.5rem;';
 
@@ -5734,7 +5831,9 @@
 
                 const emptyText = createElement('p', 'text-[#BEBEBE]');
                 emptyText.style.fontSize = '14px';
-                emptyText.textContent = 'Complete lessons in this category from the Dashboard, then come back here to review them.';
+                emptyText.textContent = showingExpandedDifficultyAccess
+                    ? 'Lessons for your unlocked difficulties will appear here as soon as they are available in this category.'
+                    : 'Complete lessons in this category from the Dashboard, then come back here to review them.';
 
                 emptyState.appendChild(emptyTitle);
                 emptyState.appendChild(emptyText);
@@ -5742,7 +5841,7 @@
             } else {
                 const reviewList = createElement('div', 'space-y-4');
 
-                selectedGroup.completedLessons.forEach((lesson) => {
+                moduleLessons.forEach((lesson) => {
                     const card = createElement('div', 'card p-5 transition-all hover:scale-[1.01] cursor-pointer');
                     card.style.cssText = 'background: linear-gradient(180deg, #262626 0%, #202020 100%); border: 1px solid #2E2E2E; border-radius: 1.5rem;';
 
@@ -5755,7 +5854,10 @@
 
                     const lessonMeta = createElement('p', 'text-[#BEBEBE]');
                     lessonMeta.style.fontSize = '13px';
-                    lessonMeta.textContent = `${lesson.difficulty || 'Lesson'} • Tap to review`;
+                    const lessonDifficultyLabel = formatDisplayName(lesson.difficulty || 'Lesson', 'Lesson');
+                    lessonMeta.textContent = isLessonCompleted(lesson)
+                        ? `${lessonDifficultyLabel} • Tap to review`
+                        : `${lessonDifficultyLabel} • Tap to start`;
 
                     info.appendChild(lessonTitle);
                     info.appendChild(lessonMeta);
