@@ -226,7 +226,8 @@ const server = http.createServer(async (request, response) => {
     } catch (error) {
         console.error('Recommendation generation failed.', error);
         sendJson(response, 500, {
-            error: 'Recommendation generation failed.'
+            error: 'Recommendation generation failed.',
+            details: error?.message || String(error)
         });
     }
 });

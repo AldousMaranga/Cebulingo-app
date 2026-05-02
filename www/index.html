@@ -3348,7 +3348,14 @@
                     });
 
                     if (!response.ok) {
-                        throw new Error(`Review description endpoint returned ${response.status}`);
+                        let errorDetails = '';
+                        try {
+                            errorDetails = await response.text();
+                        } catch (readError) {
+                            errorDetails = '';
+                        }
+
+                        throw new Error(`Review description endpoint returned ${response.status}${errorDetails ? `: ${errorDetails}` : ''}`);
                     }
 
                     const data = await response.json();
