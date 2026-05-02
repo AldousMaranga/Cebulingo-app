@@ -2755,6 +2755,9 @@
             screen.appendChild(header);
 
             const content = createElement('div', `flex-1 ${isMobile ? 'px-6 py-6' : 'px-12 py-8'}`);
+            content.style.paddingBottom = 'calc(140px + env(safe-area-inset-bottom, 0px))';
+            content.style.paddingBottom = 'calc(140px + env(safe-area-inset-bottom, 0px))';
+            content.style.paddingBottom = 'calc(100px + env(safe-area-inset-bottom, 0px))';
 
             const loadingCard = createElement('div', 'card p-6');
             loadingCard.style.cssText = 'text-align: center; color: #BEBEBE;';
@@ -5548,6 +5551,7 @@
 
             // Content
             const content = createElement('div', `flex-1 ${isMobile ? 'px-6 py-6' : 'px-12 py-8'}`);
+            content.style.paddingBottom = 'calc(120px + env(safe-area-inset-bottom, 0px))';
             const subtitle = createElement('p', 'text-[#BEBEBE]');
             subtitle.style.cssText = `font-size: ${isMobile ? '14px' : '16px'}; margin-bottom: 1.5rem;`;
             subtitle.textContent = 'Browse all lesson categories here. Unlocked categories are available now, while locked ones stay visible until you progress further.';
@@ -5717,6 +5721,7 @@
             screen.appendChild(header);
 
             const content = createElement('div', `flex-1 ${isMobile ? 'px-6 py-6' : 'px-12 py-8'}`);
+            content.style.paddingBottom = 'calc(120px + env(safe-area-inset-bottom, 0px))';
 
             if (!selectedGroup.completedLessons.length) {
                 const emptyState = createElement('div', 'card p-6');
@@ -5968,13 +5973,17 @@
 
             content.appendChild(achievementsGrid);
 
+            const profileBottomSpacer = createElement('div', '');
+            profileBottomSpacer.style.height = '140px';
+            profileBottomSpacer.style.pointerEvents = 'none';
+            content.appendChild(profileBottomSpacer);
+
+            screen.appendChild(content);
             // Bottom spacer and nav
             const spacer = createElement('div', '');
             spacer.style.height = '80px';
             screen.appendChild(spacer);
             screen.appendChild(createBottomNav('profile'));
-
-            screen.appendChild(content);
             container.appendChild(screen);
 
             if (typeof lucide !== 'undefined') {
