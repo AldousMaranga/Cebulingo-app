@@ -133,7 +133,16 @@ async function generateRecommendation(payload) {
     });
 
     const outputText = response.output_text || '{}';
-    return JSON.parse(outputText);
+    const parsed = JSON.parse(outputText);
+    console.log('[AI recommendation] Generated response', {
+        isCorrect: Boolean(payload?.isCorrect),
+        questionType: payload?.questionType || '',
+        promptText: payload?.promptText || '',
+        correctAnswer: payload?.correctAnswer || '',
+        message: parsed?.message || '',
+        tone: parsed?.tone || ''
+    });
+    return parsed;
 }
 
 const server = http.createServer(async (request, response) => {
