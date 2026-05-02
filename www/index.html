@@ -1231,6 +1231,21 @@
             return categoryMap[normalized] || normalized;
         }
 
+        function formatDisplayName(value, fallback = '') {
+            const rawValue = (value || '').toString().trim();
+            if (!rawValue) {
+                return fallback;
+            }
+
+            return rawValue
+                .replace(/[-_]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .split(' ')
+                .map(word => word ? word.charAt(0).toUpperCase() + word.slice(1).toLowerCase() : '')
+                .join(' ');
+        }
+
         function normalizeDifficulty(value) {
             const normalized = normalizeValue(value);
 
@@ -2284,7 +2299,7 @@
 
                     const categoryTitle = createElement('h3', 'text-white');
                     categoryTitle.style.cssText = `font-size: ${isMobile ? '26px' : '30px'}; font-weight: 700; letter-spacing: -0.02em;`;
-                    categoryTitle.textContent = group.pathway;
+                    categoryTitle.textContent = formatDisplayName(group.pathway, 'General Pathway');
 
                     categoryTitleRow.appendChild(categoryIcon);
                     categoryTitleRow.appendChild(categoryTitle);
@@ -5572,7 +5587,7 @@
                     const info = createElement('div', '');
                     const moduleTitle = createElement('h3', 'text-white mb-1');
                     moduleTitle.style.fontSize = isMobile ? '18px' : '22px';
-                    moduleTitle.textContent = group.pathway || 'General Pathway';
+                    moduleTitle.textContent = formatDisplayName(group.pathway, 'General Pathway');
 
                     const lessonsText = createElement('p', 'text-[#BEBEBE]');
                     lessonsText.style.fontSize = '14px';
@@ -5689,7 +5704,7 @@
             const titleWrap = createElement('div', '');
             const title = createElement('h1', 'text-white');
             title.style.cssText = 'font-size: 18px; font-weight: 700;';
-            title.textContent = selectedGroup.pathway || 'Module Category';
+            title.textContent = formatDisplayName(selectedGroup.pathway, 'Module Category');
 
             const subtitle = createElement('p', 'text-[#BEBEBE]');
             subtitle.style.fontSize = '12px';
