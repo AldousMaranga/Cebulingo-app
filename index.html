@@ -3213,19 +3213,32 @@
             navigateTo('lesson-failed');
         }
 
+        function configureQuestionButton(label = 'CHECK', onClick = checkAnswer, { disabled = false } = {}) {
+            const checkBtn = document.getElementById('check-button');
+            if (!checkBtn) {
+                return;
+            }
+
+            checkBtn.textContent = label;
+            checkBtn.onclick = onClick;
+            checkBtn.disabled = disabled;
+            checkBtn.style.opacity = disabled ? '0.5' : '1';
+        }
+
+        function configureQuestionButtonAsNext(onNext) {
+            configureQuestionButton('NEXT', onNext, { disabled: false });
+        }
+
         function handleCorrectAttempt() {
             SoundEffects.playCorrect();
             score++;
-
-            setTimeout(() => {
-                moveToNextQuestion();
-            }, 1500);
+            configureQuestionButtonAsNext(() => moveToNextQuestion());
         }
 
         function handleIncorrectAttempt(question, details = {}, options = {}) {
             const {
                 onRetry = () => { },
-                finalDelay = 2200
+                onResolved = () => { }
             } = options;
 
             SoundEffects.playIncorrect();
@@ -3240,14 +3253,15 @@
                         : 'You ran out of hearts. This lesson will restart so you can try again.',
                     'error'
                 );
-                setTimeout(() => {
+                configureQuestionButtonAsNext(() => {
                     if (heartsLeft <= 0) {
                         failCurrentLesson();
                         return;
                     }
 
                     moveToNextQuestion();
-                }, finalDelay);
+                });
+                onResolved();
                 return;
             }
 
@@ -4811,11 +4825,7 @@
                 );
                 updatePronunciationUiState();
 
-                const checkBtn = document.getElementById('check-button');
-                if (checkBtn) {
-                    checkBtn.disabled = true;
-                    checkBtn.style.opacity = '0.5';
-                }
+                configureQuestionButton('CHECK', checkAnswer, { disabled: true });
 
                 if (isCorrect) {
                     handleCorrectAttempt();
@@ -4834,7 +4844,7 @@
                                 updateAttemptIndicator();
                                 updatePronunciationUiState();
                             },
-                            finalDelay: 2200
+                            onResolved: () => updatePronunciationUiState()
                         }
                     );
                 }
@@ -4874,11 +4884,7 @@
                 );
                 updateSpellingUiState();
 
-                const checkBtn = document.getElementById('check-button');
-                if (checkBtn) {
-                    checkBtn.disabled = true;
-                    checkBtn.style.opacity = '0.5';
-                }
+                configureQuestionButton('CHECK', checkAnswer, { disabled: true });
 
                 if (isCorrect) {
                     handleCorrectAttempt();
@@ -4897,7 +4903,7 @@
                                 updateSpellingUiState();
                                 document.getElementById('spelling-answer-input')?.focus();
                             },
-                            finalDelay: 2200
+                            onResolved: () => updateSpellingUiState()
                         }
                     );
                 }
@@ -4960,15 +4966,15 @@
                                 retryCheckBtn.style.opacity = '0.5';
                             }
                         },
-                        finalDelay: 2000
+                        onResolved: () => {
+                            const resolvedCheckBtn = document.getElementById('check-button');
+                            if (resolvedCheckBtn) {
+                                resolvedCheckBtn.style.opacity = '1';
+                            }
+                        }
                     }
                 );
             }
-
-            // Disable check button
-            const checkBtn = document.getElementById('check-button');
-            checkBtn.disabled = true;
-            checkBtn.style.opacity = '0.5';
         }
 
         // Lesson Reviewer Screen
