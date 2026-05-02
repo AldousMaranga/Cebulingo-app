@@ -5360,10 +5360,6 @@
 
             content.appendChild(form);
             screen.appendChild(content);
-            const spacer = createElement('div', '');
-            spacer.style.height = '80px';
-            screen.appendChild(spacer);
-            screen.appendChild(createBottomNav(null));
             container.appendChild(screen);
 
             if (typeof lucide !== 'undefined') {
@@ -5443,13 +5439,6 @@
             // Sparkle effect
             screen.appendChild(createSparkleEffect());
 
-            // Admin button (top-right, subtle)
-            const adminBtn = createElement('button', 'absolute top-4 right-4 z-20 p-2 rounded-lg transition-all hover:scale-110');
-            adminBtn.style.cssText = 'background: rgba(42,42,42,0.6); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);';
-            adminBtn.innerHTML = '<i data-lucide="shield" style="width: 18px; height: 18px; color: #6BB6FF;"></i>';
-            adminBtn.onclick = () => navigateTo('admin-login');
-            screen.appendChild(adminBtn);
-
             // === Main Content Area ===
             const mainContent = createElement('div', 'flex-1 flex flex-col items-center justify-center z-10');
             mainContent.style.padding = '2rem 1.5rem 0';
@@ -5480,7 +5469,7 @@
 
             screen.appendChild(mainContent);
 
-            // === Bottom Section: Buttons + Nav ===
+            // === Bottom Section: Buttons ===
             const bottomSection = createElement('div', 'z-10');
             bottomSection.style.padding = '1.5rem';
             bottomSection.style.width = '100%';
@@ -5502,30 +5491,6 @@
             buttonsContainer.appendChild(getStartedBtn);
             buttonsContainer.appendChild(loginBtn);
             bottomSection.appendChild(buttonsContainer);
-
-            // Bottom Nav Bar
-            const navBar = createElement('div', 'flex items-center');
-            navBar.style.cssText = 'display: flex; align-items: center; justify-content: center; background: rgba(30,30,30,0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-radius: 1rem; padding: 0.6rem 0.5rem; border: 1px solid rgba(255,255,255,0.06);';
-
-            const navItems = [
-                { icon: 'layout-dashboard', label: 'Dashboard', action: () => navigateTo('dashboard'), primary: true },
-                { icon: 'trophy', label: 'Ranks', action: () => navigateTo('leaderboard') },
-                { icon: 'book-open', label: 'Modules', action: () => navigateTo('modules') },
-                { icon: 'user', label: 'Profile', action: () => navigateTo('profile') }
-            ];
-
-            navItems.forEach(item => {
-                const navBtn = createElement('button', 'flex flex-col items-center gap-1 transition-all');
-                navBtn.style.cssText = `flex: 1 1 0; min-width: 0; border: none; cursor: pointer; padding: 0.5rem 0.25rem; border-radius: 0.75rem; background: ${item.primary ? 'linear-gradient(135deg, #1A73E8 0%, #4DACFF 100%)' : 'transparent'};`;
-                navBtn.innerHTML = `
-            <i data-lucide="${item.icon}" style="width: 20px; height: 20px; color: ${item.primary ? 'white' : '#8899aa'};"></i>
-            <span style="font-size: 10px; color: ${item.primary ? 'white' : '#8899aa'}; font-weight: 500;">${item.label}</span>
-        `;
-                navBtn.onclick = item.action;
-                navBar.appendChild(navBtn);
-            });
-
-            bottomSection.appendChild(navBar);
             screen.appendChild(bottomSection);
             container.appendChild(screen);
 
@@ -6495,10 +6460,6 @@
 
             content.appendChild(form);
             screen.appendChild(content);
-            const spacer = createElement('div', '');
-            spacer.style.height = '80px';
-            screen.appendChild(spacer);
-            screen.appendChild(createBottomNav(null));
             container.appendChild(screen);
 
             if (typeof lucide !== 'undefined') {
