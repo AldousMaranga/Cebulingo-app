@@ -38,6 +38,10 @@
         const USER_PROFILE_COLLECTION = 'users';
         const USER_ACCOUNT_COLLECTION = 'user_accounts';
         const LEADERBOARD_COLLECTION = 'leaderboard';
+        const LESSON_CACHE_KEY = 'lessonCatalogCache';
+        const QUESTION_CACHE_KEY = 'lessonQuestionsCache';
+        const PENDING_PROGRESS_SYNC_KEY = 'pendingProgressSync';
+        const ONLINE_ACHIEVEMENTS_CACHE_KEY = 'onlineAchievementsSnapshot';
         window.CEBULINGO_AI_RECOMMENDER_URL = 'https://cebulingo-admin.vercel.app/api/recommendation';
         let nativeGoogleSignInInitPromise = null;
 
@@ -86,6 +90,7 @@
             selectedLessonId: null,
             selectedLessonTitle: null,
             selectedModulePathway: null,
+            isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
             learningPreferences: {
                 category: null,
                 proficiency: null
@@ -122,6 +127,8 @@
                 };
             }
 
+            updateOnlineState();
+
             // Apply mobile mode
             updateViewMode();
 
@@ -151,6 +158,17 @@
                     Storage.clear('userData');
                     navigateTo('login');
                 }
+            });
+
+            window.addEventListener('online', () => {
+                updateOnlineState();
+                flushPendingProgressSync().catch((error) => {
+                    console.error('Failed to flush offline progress after reconnect:', error);
+                });
+            });
+
+            window.addEventListener('offline', () => {
+                updateOnlineState();
             });
         }
 
@@ -1307,6 +1325,11 @@
                 return Promise.resolve();
             }
 
+            if (!AppState.isOnline) {
+                queuePendingProgressSync();
+                return Promise.resolve();
+            }
+
             return db.collection(USER_PROFILE_COLLECTION).doc(user.uid).set({
                 learningPreferences: {
                     category: AppState.learningPreferences.category ?? null,
@@ -1408,6 +1431,20 @@
                 .map((lesson, index) => ({ lesson, index }))
                 .sort((a, b) => getLessonSortValue(a.lesson, a.index) - getLessonSortValue(b.lesson, b.index))
                 .map(item => item.lesson);
+        }
+
+        async function warmLessonQuestionCache(lessons = []) {
+            if (!AppState.isOnline || !Array.isArray(lessons) || !lessons.length) {
+                return;
+            }
+
+            await Promise.allSettled(lessons.map(async (lesson) => {
+                if (!lesson?.id || getCachedQuestionsForLesson(lesson.id).length) {
+                    return;
+                }
+
+                await fetchQuestionsForLesson(lesson.id);
+            }));
         }
 
         function getPathwayMeta(pathway, index = 0) {
@@ -1704,12 +1741,27 @@
             ];
         }
 
+        function getProfileAchievementsForCurrentMode() {
+            if (AppState.isOnline) {
+                const onlineAchievements = getLiveProfileAchievements();
+                saveOnlineAchievementsSnapshot(onlineAchievements);
+                return onlineAchievements;
+            }
+
+            const cachedAchievements = getCachedOnlineAchievements();
+            return cachedAchievements.length ? cachedAchievements : getLiveProfileAchievements();
+        }
+
         function saveUserDataLocally() {
             Storage.save('userData', AppState.userData);
         }
 
         function syncLeaderboardProfile(user = auth.currentUser) {
             if (!user) {
+                return Promise.resolve();
+            }
+
+            if (!AppState.isOnline) {
                 return Promise.resolve();
             }
 
@@ -1730,21 +1782,39 @@
                 return Promise.resolve();
             }
 
+            if (!AppState.isOnline) {
+                queuePendingProgressSync();
+                return Promise.resolve();
+            }
+
+            const syncPayload = buildProgressSyncPayload();
+
             return Promise.all([
                 db.collection(USER_PROFILE_COLLECTION).doc(user.uid).set({
-                    streak: AppState.userData.streak ?? 0,
-                    totalXP: AppState.userData.totalXP ?? 0,
-                    currentLevel: AppState.userData.currentLevel ?? 1,
-                    completedLessons: AppState.userData.completedLessons || [],
-                    lessonResults: AppState.userData.lessonResults || {},
-                    lastActiveDate: AppState.userData.lastActiveDate || '',
+                    streak: syncPayload.streak,
+                    totalXP: syncPayload.totalXP,
+                    currentLevel: syncPayload.currentLevel,
+                    completedLessons: syncPayload.completedLessons,
+                    lessonResults: syncPayload.lessonResults,
+                    lastActiveDate: syncPayload.lastActiveDate,
+                    learningPreferences: syncPayload.learningPreferences,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 }, { merge: true }),
                 syncLeaderboardProfile(user)
-            ]);
+            ]).then((result) => {
+                setPendingProgressSyncPayload(null);
+                return result;
+            }).catch((error) => {
+                queuePendingProgressSync();
+                throw error;
+            });
         }
 
         async function updateUserDailyActivity(user = auth.currentUser) {
+            if (!AppState.isOnline) {
+                return;
+            }
+
             const today = getLocalDateKey();
             const lastActiveDate = AppState.userData.lastActiveDate || '';
 
@@ -1763,6 +1833,19 @@
             } catch (error) {
                 console.error('Failed to sync daily activity:', error);
             }
+        }
+
+        async function flushPendingProgressSync(user = auth.currentUser) {
+            if (!user || !AppState.isOnline) {
+                return;
+            }
+
+            const pendingPayload = getPendingProgressSyncPayload();
+            if (!pendingPayload) {
+                return;
+            }
+
+            await syncUserProgressToFirestore(user);
         }
 
         function buildLessonCompletionSummary() {
@@ -1857,6 +1940,10 @@
         }
 
         async function syncUserDocuments(user, options = {}) {
+            if (!AppState.isOnline) {
+                return;
+            }
+
             const accountRef = db.collection(USER_ACCOUNT_COLLECTION).doc(user.uid);
             const profileRef = db.collection(USER_PROFILE_COLLECTION).doc(user.uid);
             const leaderboardRef = db.collection(LEADERBOARD_COLLECTION).doc(user.uid);
@@ -1936,6 +2023,11 @@
             AppState.userData.photoURL = user.photoURL || '';
             AppState.userData.uid = user.uid;
 
+            if (!AppState.isOnline) {
+                saveUserDataLocally();
+                return;
+            }
+
             await syncUserDocuments(user);
 
             const profileDoc = await db.collection(USER_PROFILE_COLLECTION).doc(user.uid).get();
@@ -1959,6 +2051,7 @@
             }
 
             await updateUserDailyActivity(user);
+            await flushPendingProgressSync(user);
             saveUserDataLocally();
         }
 
@@ -2174,9 +2267,11 @@
                     id: doc.id,
                     ...doc.data()
                 }));
+                saveLessonCatalogCache(AppState.lessonList);
             } catch (error) {
                 console.error('Error fetching lessons:', error);
-                AppState.lessonList = [];
+                const cachedLessons = getCachedLessonCatalog();
+                AppState.lessonList = cachedLessons;
             }
         }
 
@@ -2184,13 +2279,15 @@
             try {
                 const snapshot = await contentDb.collection('lessons').doc(lessonId).collection('questions').get();
 
-                return snapshot.docs.map(doc => ({
+                const questions = snapshot.docs.map(doc => ({
                     id: doc.id,
                     ...doc.data()
                 }));
+                saveQuestionsForLesson(lessonId, questions);
+                return questions;
             } catch (error) {
                 console.error('Error fetching questions:', error);
-                return [];
+                return getCachedQuestionsForLesson(lessonId);
             }
         }
 
@@ -2240,6 +2337,10 @@
                 ? getAlternativeCategoryGroups(normalizeCategory(AppState.learningPreferences.category))
                 : [];
             const visiblePerformanceSummary = completedVisibleLessons ? getVisibleLessonPerformanceSummary(filteredLessons) : null;
+
+            warmLessonQuestionCache(filteredLessons).catch((error) => {
+                console.error('Failed to warm offline lesson cache:', error);
+            });
 
             const content = createElement('div', 'max-w-2xl mx-auto px-6 py-8');
 
@@ -2297,7 +2398,9 @@
 
             if (!AppState.lessonList.length) {
                 const emptyText = createElement('p', 'text-[#BEBEBE]');
-                emptyText.textContent = 'No lessons available yet.';
+                emptyText.textContent = AppState.isOnline
+                    ? 'No lessons available yet.'
+                    : 'No cached lessons are available offline yet. Reconnect once to load your lessons on this device.';
                 content.appendChild(emptyText);
             } else if (!groupedLessons.length) {
                 const emptyState = createElement('div', 'card p-6');
@@ -3338,7 +3441,7 @@
 
         const AIRecommendationService = {
             hasEndpoint() {
-                return Boolean(this.getEndpoint());
+                return AppState.isOnline && Boolean(this.getEndpoint());
             },
             getEndpoint() {
                 const runtimeEndpoint = typeof window !== 'undefined' && typeof window.CEBULINGO_AI_RECOMMENDER_URL === 'string'
@@ -3357,6 +3460,10 @@
                 Storage.save('aiRecommendationEndpoint', normalizedUrl);
             },
             async generate(context) {
+                if (!AppState.isOnline) {
+                    return null;
+                }
+
                 const endpoint = this.getEndpoint();
                 if (!endpoint) {
                     return null;
@@ -3400,6 +3507,101 @@
                 }
             }
         };
+
+        function isAppOnline() {
+            return typeof navigator === 'undefined' ? true : navigator.onLine;
+        }
+
+        function updateOnlineState() {
+            AppState.isOnline = isAppOnline();
+        }
+
+        function getCachedLessonCatalog() {
+            const cached = Storage.load(LESSON_CACHE_KEY);
+            return Array.isArray(cached?.lessons) ? cached.lessons : [];
+        }
+
+        function saveLessonCatalogCache(lessons = []) {
+            Storage.save(LESSON_CACHE_KEY, {
+                lessons,
+                updatedAt: Date.now()
+            });
+        }
+
+        function getQuestionCacheMap() {
+            const cached = Storage.load(QUESTION_CACHE_KEY);
+            return cached && typeof cached === 'object' ? cached : {};
+        }
+
+        function getCachedQuestionsForLesson(lessonId) {
+            if (!lessonId) {
+                return [];
+            }
+
+            const questionMap = getQuestionCacheMap();
+            return Array.isArray(questionMap[lessonId]?.questions)
+                ? questionMap[lessonId].questions
+                : [];
+        }
+
+        function saveQuestionsForLesson(lessonId, questions = []) {
+            if (!lessonId) {
+                return;
+            }
+
+            const questionMap = getQuestionCacheMap();
+            questionMap[lessonId] = {
+                questions,
+                updatedAt: Date.now()
+            };
+            Storage.save(QUESTION_CACHE_KEY, questionMap);
+        }
+
+        function getPendingProgressSyncPayload() {
+            const cached = Storage.load(PENDING_PROGRESS_SYNC_KEY);
+            return cached && typeof cached === 'object' ? cached : null;
+        }
+
+        function setPendingProgressSyncPayload(payload) {
+            if (!payload) {
+                Storage.clear(PENDING_PROGRESS_SYNC_KEY);
+                return;
+            }
+
+            Storage.save(PENDING_PROGRESS_SYNC_KEY, payload);
+        }
+
+        function buildProgressSyncPayload() {
+            return {
+                streak: AppState.userData.streak ?? 0,
+                totalXP: AppState.userData.totalXP ?? 0,
+                currentLevel: AppState.userData.currentLevel ?? 1,
+                completedLessons: AppState.userData.completedLessons || [],
+                lessonResults: AppState.userData.lessonResults || {},
+                lastActiveDate: AppState.userData.lastActiveDate || '',
+                learningPreferences: {
+                    category: AppState.learningPreferences.category ?? null,
+                    proficiency: AppState.learningPreferences.proficiency ?? null
+                },
+                updatedAt: Date.now()
+            };
+        }
+
+        function queuePendingProgressSync() {
+            setPendingProgressSyncPayload(buildProgressSyncPayload());
+        }
+
+        function getCachedOnlineAchievements() {
+            const cached = Storage.load(ONLINE_ACHIEVEMENTS_CACHE_KEY);
+            return Array.isArray(cached?.achievements) ? cached.achievements : [];
+        }
+
+        function saveOnlineAchievementsSnapshot(achievements = []) {
+            Storage.save(ONLINE_ACHIEVEMENTS_CACHE_KEY, {
+                achievements,
+                updatedAt: Date.now()
+            });
+        }
 
         if (typeof window !== 'undefined') {
             window.CebuLingoAI = {
@@ -5950,7 +6152,7 @@
             const container = document.getElementById('content-container');
             const isMobile = AppState.isMobile;
             const completedLessonsCount = getCompletedLessonsCount();
-            const achievements = getLiveProfileAchievements();
+            const achievements = getProfileAchievementsForCurrentMode();
 
             const screen = createElement('div', 'flex flex-col h-full overflow-y-auto');
             screen.style.backgroundColor = '#1C1C1C';
@@ -6034,6 +6236,13 @@
             achievementsTitle.style.fontSize = isMobile ? '20px' : '24px';
             achievementsTitle.textContent = 'Achievements';
             content.appendChild(achievementsTitle);
+
+            if (!AppState.isOnline) {
+                const offlineAchievementsNote = createElement('p', 'text-[#BEBEBE] mb-4');
+                offlineAchievementsNote.style.fontSize = '13px';
+                offlineAchievementsNote.textContent = 'Reconnect to refresh achievements and streak progress.';
+                content.appendChild(offlineAchievementsNote);
+            }
 
             const achievementsGrid = createElement('div', 'space-y-3');
 
