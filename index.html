@@ -39,7 +39,6 @@
         const USER_ACCOUNT_COLLECTION = 'user_accounts';
         const LEADERBOARD_COLLECTION = 'leaderboard';
         window.CEBULINGO_AI_RECOMMENDER_URL = 'https://cebulingo-admin.vercel.app/api/recommendation';
-        window.CEBULINGO_REVIEW_DESCRIPTION_URL = window.CEBULINGO_REVIEW_DESCRIPTION_URL || '';
         let nativeGoogleSignInInitPromise = null;
 
     </script>
@@ -3077,12 +3076,7 @@
                 reviewItems.push({
                     cebuano,
                     english,
-                    baseDescription: english,
                     audioSource: getQuestionAudioSource(question),
-                    clue: englishClue || '',
-                    isPhrase: isPhraseTypingQuestion || isPhrasePronunciationQuestion,
-                    isPronunciation: isPronunciationQuestion,
-                    isSpelling: isSpellingQuestion
                 });
             });
 
@@ -3293,100 +3287,6 @@
             }
         };
 
-        const AIReviewDescriptionService = {
-            hasEndpoint() {
-                return Boolean(this.getEndpoint());
-            },
-            getEndpoint() {
-                const runtimeEndpoint = typeof window !== 'undefined' && typeof window.CEBULINGO_REVIEW_DESCRIPTION_URL === 'string'
-                    ? window.CEBULINGO_REVIEW_DESCRIPTION_URL
-                    : '';
-                const savedEndpoint = Storage.load('aiReviewDescriptionEndpoint');
-                const fallbackEndpoint = AIRecommendationService.getEndpoint();
-                return ((savedEndpoint || runtimeEndpoint || fallbackEndpoint || '') + '').trim();
-            },
-            setEndpoint(url = '') {
-                const normalizedUrl = (url || '').toString().trim();
-                if (!normalizedUrl) {
-                    Storage.clear('aiReviewDescriptionEndpoint');
-                    return;
-                }
-
-                Storage.save('aiReviewDescriptionEndpoint', normalizedUrl);
-            },
-            async enhanceReviewItems(items = []) {
-                const endpoint = this.getEndpoint();
-                if (!endpoint || !Array.isArray(items) || !items.length) {
-                    if (!endpoint) {
-                        console.warn('AI review description endpoint is not configured. Using fallback review descriptions.');
-                    }
-                    return items;
-                }
-
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 8000);
-
-                try {
-                    const response = await fetch(endpoint, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            requestType: 'review_descriptions',
-                            items: items.map((item, index) => ({
-                                index,
-                                word: item.cebuano || '',
-                                clue: item.clue || '',
-                                baseDescription: item.baseDescription || item.english || '',
-                                isPhrase: Boolean(item.isPhrase),
-                                isPronunciation: Boolean(item.isPronunciation),
-                                isSpelling: Boolean(item.isSpelling)
-                            }))
-                        }),
-                        signal: controller.signal
-                    });
-
-                    if (!response.ok) {
-                        let errorDetails = '';
-                        try {
-                            errorDetails = await response.text();
-                        } catch (readError) {
-                            errorDetails = '';
-                        }
-
-                        throw new Error(`Review description endpoint returned ${response.status}${errorDetails ? `: ${errorDetails}` : ''}`);
-                    }
-
-                    const data = await response.json();
-                    const descriptions = Array.isArray(data?.descriptions) ? data.descriptions : [];
-                    if (!descriptions.length) {
-                        console.warn('AI review description endpoint returned no descriptions. Using fallback review descriptions.');
-                        return items;
-                    }
-
-                    const descriptionMap = new Map();
-                    descriptions.forEach((entry) => {
-                        const index = Number(entry?.index);
-                        const description = (entry?.description || '').toString().trim();
-                        if (Number.isInteger(index) && description) {
-                            descriptionMap.set(index, description);
-                        }
-                    });
-
-                    return items.map((item, index) => ({
-                        ...item,
-                        english: descriptionMap.get(index) || item.english
-                    }));
-                } catch (error) {
-                    console.warn('AI review description fallback in use.', error);
-                    return items;
-                } finally {
-                    clearTimeout(timeoutId);
-                }
-            }
-        };
-
         if (typeof window !== 'undefined') {
             window.CebuLingoAI = {
                 setRecommendationEndpoint(url) {
@@ -3394,12 +3294,6 @@
                 },
                 getRecommendationEndpoint() {
                     return AIRecommendationService.getEndpoint();
-                },
-                setReviewDescriptionEndpoint(url) {
-                    AIReviewDescriptionService.setEndpoint(url);
-                },
-                getReviewDescriptionEndpoint() {
-                    return AIReviewDescriptionService.getEndpoint();
                 }
             };
         }
@@ -5054,8 +4948,7 @@
 
             try {
                 const preparedQuestions = await ensurePreparedLessonQuestions();
-                const fallbackReviewItems = buildLessonReviewItems(preparedQuestions);
-                const reviewItems = await AIReviewDescriptionService.enhanceReviewItems(fallbackReviewItems);
+                const reviewItems = buildLessonReviewItems(preparedQuestions);
 
                 cardsContainer.innerHTML = '';
 

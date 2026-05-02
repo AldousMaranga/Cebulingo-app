@@ -65,20 +65,6 @@ function buildPrompt(payload) {
     }, null, 2);
 }
 
-function buildReviewDescriptionPrompt(items = []) {
-    return JSON.stringify({
-        items: items.map((item) => ({
-            index: Number(item.index || 0),
-            bisaya_word: item.word || '',
-            english_clue: item.clue || '',
-            fallback_description: item.baseDescription || '',
-            is_phrase: Boolean(item.isPhrase),
-            is_pronunciation: Boolean(item.isPronunciation),
-            is_spelling: Boolean(item.isSpelling)
-        }))
-    }, null, 2);
-}
-
 async function generateRecommendation(payload) {
     const response = await client.responses.create({
         model,
@@ -145,57 +131,6 @@ async function generateRecommendation(payload) {
     return JSON.parse(outputText);
 }
 
-async function generateReviewDescriptions(items = []) {
-    const response = await client.responses.create({
-        model,
-        reasoning: { effort: 'low' },
-        instructions: [
-            'You write short English learning descriptions for a Cebuano vocabulary review screen.',
-            'Return JSON only with a single key named descriptions.',
-            'descriptions must be an array of objects with keys: index and description.',
-            'Each description must be one sentence, natural, and 12 to 24 words.',
-            'Write in plain English for beginners.',
-            'Add one concrete detail about when, why, or how the word is commonly used.',
-            'Do not simply repeat the English clue alone.',
-            'Do not mention that it is a quiz, flashcard, app, or lesson.',
-            'Do not invent cultural facts you are unsure about.',
-            'If the clue is too limited, improve the fallback_description slightly rather than hallucinating.',
-            'Keep each description specific to the item.',
-            'Do not include markdown, numbering, or extra keys.'
-        ].join(' '),
-        input: `Review items:\n${buildReviewDescriptionPrompt(items)}`,
-        text: {
-            format: {
-                type: 'json_schema',
-                name: 'review_descriptions',
-                schema: {
-                    type: 'object',
-                    additionalProperties: false,
-                    properties: {
-                        descriptions: {
-                            type: 'array',
-                            items: {
-                                type: 'object',
-                                additionalProperties: false,
-                                properties: {
-                                    index: { type: 'integer' },
-                                    description: { type: 'string' }
-                                },
-                                required: ['index', 'description']
-                            }
-                        }
-                    },
-                    required: ['descriptions']
-                }
-            }
-        }
-    });
-
-    const outputText = response.output_text || '{}';
-    const parsed = JSON.parse(outputText);
-    return Array.isArray(parsed?.descriptions) ? parsed.descriptions : [];
-}
-
 const server = http.createServer(async (request, response) => {
     if (request.method === 'OPTIONS') {
         response.writeHead(204, {
@@ -215,12 +150,6 @@ const server = http.createServer(async (request, response) => {
     try {
         const rawBody = await readRequestBody(request);
         const payload = rawBody ? JSON.parse(rawBody) : {};
-        if (Array.isArray(payload?.items)) {
-            const descriptions = await generateReviewDescriptions(payload.items);
-            sendJson(response, 200, { descriptions });
-            return;
-        }
-
         const recommendation = await generateRecommendation(payload);
         sendJson(response, 200, recommendation);
     } catch (error) {
