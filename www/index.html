@@ -39,6 +39,7 @@
         const USER_ACCOUNT_COLLECTION = 'user_accounts';
         const LEADERBOARD_COLLECTION = 'leaderboard';
         window.CEBULINGO_AI_RECOMMENDER_URL = 'https://cebulingo-admin.vercel.app/api/recommendation';
+        window.CEBULINGO_REVIEW_DESCRIPTION_URL = window.CEBULINGO_REVIEW_DESCRIPTION_URL || '';
         let nativeGoogleSignInInitPromise = null;
 
     </script>
@@ -76,7 +77,9 @@
                 currentScore: 0,
                 totalQuestions: 0,
                 wrongQuestions: [],
-                completionSummary: null
+                completionSummary: null,
+                preparedLessonId: null,
+                preparedQuestions: []
             },
             lessonList: [],
             selectedLessonId: null,
@@ -2318,6 +2321,7 @@
                             lessonButton.onclick = () => {
                                 AppState.selectedLessonId = lesson.id;
                                 AppState.selectedLessonTitle = lesson.title;
+                                resetPreparedLessonQuestions();
                                 navigateTo('lesson-start');
                             };
                         }
@@ -2936,15 +2940,8 @@
             return shuffled;
         }
 
-        async function initQuizData() {
-            if (!AppState.selectedLessonId) {
-                questions = [];
-                return;
-            }
-
-            const firestoreQuestions = await fetchQuestionsForLesson(AppState.selectedLessonId);
-
-            questions = shuffleArray(firestoreQuestions).map((q) => ({
+        function mapFirestoreQuestionToQuizQuestion(q = {}) {
+            return {
                 question: q.question || '',
                 answer: q.answer || '',
                 choices: q.choices || [],
@@ -2958,7 +2955,142 @@
                 audioUrl: q.audioUrl || q.audioURL || q.audio || q.voiceUrl || q.voiceURL || q.soundUrl || q.soundURL || '',
                 acceptedAnswers: parseAcceptedAnswers(q.acceptedAnswers ?? q.acceptedAnswer ?? ''),
                 recognitionLang: q.recognitionLang || ''
-            }));
+            };
+        }
+
+        async function ensurePreparedLessonQuestions() {
+            const selectedLessonId = AppState.selectedLessonId;
+            if (!selectedLessonId) {
+                AppState.lessonData.preparedLessonId = null;
+                AppState.lessonData.preparedQuestions = [];
+                return [];
+            }
+
+            const hasPreparedQuestions = AppState.lessonData.preparedLessonId === selectedLessonId &&
+                Array.isArray(AppState.lessonData.preparedQuestions) &&
+                AppState.lessonData.preparedQuestions.length > 0;
+
+            if (hasPreparedQuestions) {
+                return AppState.lessonData.preparedQuestions;
+            }
+
+            const firestoreQuestions = await fetchQuestionsForLesson(selectedLessonId);
+            const preparedQuestions = shuffleArray(firestoreQuestions).map(mapFirestoreQuestionToQuizQuestion);
+
+            AppState.lessonData.preparedLessonId = selectedLessonId;
+            AppState.lessonData.preparedQuestions = preparedQuestions;
+
+            return preparedQuestions;
+        }
+
+        function resetPreparedLessonQuestions() {
+            AppState.lessonData.preparedLessonId = null;
+            AppState.lessonData.preparedQuestions = [];
+        }
+
+        function buildEnglishReviewDescription(clue = '', options = {}) {
+            const sanitizedClue = (clue || '')
+                .toString()
+                .trim()
+                .replace(/[.?!]+$/g, '');
+
+            if (!sanitizedClue) {
+                return options.isPhrase
+                    ? 'Practice this Bisaya phrase before the quiz starts.'
+                    : 'Practice this Bisaya word before the quiz starts.';
+            }
+
+            const lowerClue = sanitizedClue.charAt(0).toLowerCase() + sanitizedClue.slice(1);
+
+            if (options.isPhrase) {
+                return `Use this phrase when you want to ${lowerClue}.`;
+            }
+
+            if (options.isPronunciation) {
+                return `Practice how this Bisaya word is pronounced when talking about ${lowerClue}.`;
+            }
+
+            if (options.isSpelling) {
+                return `Remember this Bisaya spelling when talking about ${lowerClue}.`;
+            }
+
+            return `Use this Bisaya word when talking about ${lowerClue}.`;
+        }
+
+        function buildLessonReviewItems(questions = []) {
+            const reviewItems = [];
+            const seenItems = new Set();
+            const maxReviewItems = 5;
+
+            questions.forEach((question) => {
+                if (reviewItems.length >= maxReviewItems) {
+                    return;
+                }
+
+                const prompt = (getPronunciationPrompt(question) || '').trim();
+                const target = (getPronunciationTarget(question) || '').trim();
+                const answer = (question.answer || '').trim();
+                const questionText = (question.question || '').trim();
+                const isPronunciationQuestion = isPronunciationQuestionData(question);
+                const isSpellingQuestion = isSpellingQuestionData(question, getSelectedLesson());
+                const isPhraseTypingQuestion = isPhraseTypingQuestionData(question, getSelectedLesson());
+                const isPhrasePronunciationQuestion = isPhrasePronunciationQuestionData(question, getSelectedLesson());
+                const hasChoices = Array.isArray(question.choices) && question.choices.length > 0;
+
+                let cebuano = '';
+                let english = '';
+
+                if (isPronunciationQuestion || isSpellingQuestion) {
+                    cebuano = target || answer || questionText;
+                } else if (hasChoices) {
+                    cebuano = answer || target || questionText;
+                } else {
+                    cebuano = questionText || target || answer;
+                }
+
+                cebuano = cebuano.trim();
+
+                if (!cebuano) {
+                    return;
+                }
+
+                const englishClue = (prompt && normalizeValue(prompt) !== normalizeValue(cebuano))
+                    ? prompt
+                    : (questionText && normalizeValue(questionText) !== normalizeValue(cebuano))
+                        ? questionText
+                        : answer;
+
+                english = buildEnglishReviewDescription(englishClue, {
+                    isPhrase: isPhraseTypingQuestion || isPhrasePronunciationQuestion,
+                    isPronunciation: isPronunciationQuestion && !isPhrasePronunciationQuestion,
+                    isSpelling: isSpellingQuestion && !isPhraseTypingQuestion
+                });
+
+                english = english.trim();
+
+                const dedupeKey = `${normalizeValue(cebuano)}::${normalizeValue(english)}`;
+                if (seenItems.has(dedupeKey)) {
+                    return;
+                }
+
+                seenItems.add(dedupeKey);
+                reviewItems.push({
+                    cebuano,
+                    english,
+                    baseDescription: english,
+                    audioSource: getQuestionAudioSource(question),
+                    clue: englishClue || '',
+                    isPhrase: isPhraseTypingQuestion || isPhrasePronunciationQuestion,
+                    isPronunciation: isPronunciationQuestion,
+                    isSpelling: isSpellingQuestion
+                });
+            });
+
+            return reviewItems;
+        }
+
+        async function initQuizData() {
+            questions = await ensurePreparedLessonQuestions();
 
             currentQuestionIndex = 0;
             score = 0;
@@ -3161,6 +3293,93 @@
             }
         };
 
+        const AIReviewDescriptionService = {
+            hasEndpoint() {
+                return Boolean(this.getEndpoint());
+            },
+            getEndpoint() {
+                const runtimeEndpoint = typeof window !== 'undefined' && typeof window.CEBULINGO_REVIEW_DESCRIPTION_URL === 'string'
+                    ? window.CEBULINGO_REVIEW_DESCRIPTION_URL
+                    : '';
+                const savedEndpoint = Storage.load('aiReviewDescriptionEndpoint');
+                const fallbackEndpoint = AIRecommendationService.getEndpoint();
+                return ((savedEndpoint || runtimeEndpoint || fallbackEndpoint || '') + '').trim();
+            },
+            setEndpoint(url = '') {
+                const normalizedUrl = (url || '').toString().trim();
+                if (!normalizedUrl) {
+                    Storage.clear('aiReviewDescriptionEndpoint');
+                    return;
+                }
+
+                Storage.save('aiReviewDescriptionEndpoint', normalizedUrl);
+            },
+            async enhanceReviewItems(items = []) {
+                const endpoint = this.getEndpoint();
+                if (!endpoint || !Array.isArray(items) || !items.length) {
+                    if (!endpoint) {
+                        console.warn('AI review description endpoint is not configured. Using fallback review descriptions.');
+                    }
+                    return items;
+                }
+
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+                try {
+                    const response = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            requestType: 'review_descriptions',
+                            items: items.map((item, index) => ({
+                                index,
+                                word: item.cebuano || '',
+                                clue: item.clue || '',
+                                baseDescription: item.baseDescription || item.english || '',
+                                isPhrase: Boolean(item.isPhrase),
+                                isPronunciation: Boolean(item.isPronunciation),
+                                isSpelling: Boolean(item.isSpelling)
+                            }))
+                        }),
+                        signal: controller.signal
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Review description endpoint returned ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    const descriptions = Array.isArray(data?.descriptions) ? data.descriptions : [];
+                    if (!descriptions.length) {
+                        console.warn('AI review description endpoint returned no descriptions. Using fallback review descriptions.');
+                        return items;
+                    }
+
+                    const descriptionMap = new Map();
+                    descriptions.forEach((entry) => {
+                        const index = Number(entry?.index);
+                        const description = (entry?.description || '').toString().trim();
+                        if (Number.isInteger(index) && description) {
+                            descriptionMap.set(index, description);
+                        }
+                    });
+
+                    return items.map((item, index) => ({
+                        ...item,
+                        english: descriptionMap.get(index) || item.english
+                    }));
+                } catch (error) {
+                    console.warn('AI review description fallback in use.', error);
+                    return items;
+                } finally {
+                    clearTimeout(timeoutId);
+                }
+            }
+        };
+
         if (typeof window !== 'undefined') {
             window.CebuLingoAI = {
                 setRecommendationEndpoint(url) {
@@ -3168,6 +3387,12 @@
                 },
                 getRecommendationEndpoint() {
                     return AIRecommendationService.getEndpoint();
+                },
+                setReviewDescriptionEndpoint(url) {
+                    AIReviewDescriptionService.setEndpoint(url);
+                },
+                getReviewDescriptionEndpoint() {
+                    return AIReviewDescriptionService.getEndpoint();
                 }
             };
         }
@@ -4781,7 +5006,7 @@
 
         // Lesson Reviewer Screen
 
-        function renderLessonReviewer() {
+        async function renderLessonReviewer() {
             const container = document.getElementById('content-container');
             const isMobile = AppState.isMobile;
 
@@ -4802,41 +5027,11 @@
 
             content.appendChild(title);
 
-            // Review cards
-            const reviewData = [
-                { cebuano: 'Kumusta', english: 'Hello / How are you?' },
-                { cebuano: 'Salamat', english: 'Thank you' },
-                { cebuano: 'Palihug', english: 'Please' },
-                { cebuano: 'Oo', english: 'Yes' },
-                { cebuano: 'Dili', english: 'No' }
-            ];
-
             const cardsContainer = createElement('div', `space-y-4 flex-1 overflow-y-auto ${isMobile ? 'max-w-md' : 'max-w-2xl'} mx-auto w-full`);
-
-            reviewData.forEach(item => {
-                const card = createElement('div', 'card p-6 flex items-center justify-between');
-
-                const leftSide = createElement('div', '');
-                const cebuanoText = createElement('p', 'text-white mb-1');
-                cebuanoText.style.fontSize = isMobile ? '20px' : '24px';
-                cebuanoText.style.fontWeight = '600';
-                cebuanoText.textContent = item.cebuano;
-
-                const englishText = createElement('p', 'text-[#BEBEBE]');
-                englishText.style.fontSize = isMobile ? '14px' : '16px';
-                englishText.textContent = item.english;
-
-                leftSide.appendChild(cebuanoText);
-                leftSide.appendChild(englishText);
-
-                const speakerBtn = createElement('button', 'btn-icon');
-                speakerBtn.innerHTML = '<i data-lucide="volume-2" style="width: 24px; height: 24px; color: #6BB6FF;"></i>';
-                speakerBtn.onclick = () => TTS.speak(item.cebuano, 'fil-PH');
-
-                card.appendChild(leftSide);
-                card.appendChild(speakerBtn);
-                cardsContainer.appendChild(card);
-            });
+            const loadingText = createElement('p', 'text-[#BEBEBE] text-center');
+            loadingText.style.fontSize = isMobile ? '14px' : '16px';
+            loadingText.textContent = 'Loading lesson review...';
+            cardsContainer.appendChild(loadingText);
 
             content.appendChild(cardsContainer);
 
@@ -4849,6 +5044,63 @@
 
             screen.appendChild(content);
             container.appendChild(screen);
+
+            try {
+                const preparedQuestions = await ensurePreparedLessonQuestions();
+                const fallbackReviewItems = buildLessonReviewItems(preparedQuestions);
+                const reviewItems = await AIReviewDescriptionService.enhanceReviewItems(fallbackReviewItems);
+
+                cardsContainer.innerHTML = '';
+
+                if (!reviewItems.length) {
+                    const emptyState = createElement('p', 'text-[#BEBEBE] text-center');
+                    emptyState.style.fontSize = isMobile ? '14px' : '16px';
+                    emptyState.textContent = 'No sample words are available for this lesson yet.';
+                    cardsContainer.appendChild(emptyState);
+                } else {
+                    reviewItems.forEach(item => {
+                        const card = createElement('div', 'card p-6 flex items-center justify-between');
+
+                        const leftSide = createElement('div', '');
+                        const cebuanoText = createElement('p', 'text-white mb-1');
+                        cebuanoText.style.fontSize = isMobile ? '20px' : '24px';
+                        cebuanoText.style.fontWeight = '600';
+                        cebuanoText.textContent = item.cebuano;
+
+                        const englishText = createElement('p', 'text-[#BEBEBE]');
+                        englishText.style.fontSize = isMobile ? '14px' : '16px';
+                        englishText.textContent = item.english;
+
+                        leftSide.appendChild(cebuanoText);
+                        leftSide.appendChild(englishText);
+
+                        const speakerBtn = createElement('button', 'btn-icon');
+                        speakerBtn.innerHTML = '<i data-lucide="volume-2" style="width: 24px; height: 24px; color: #6BB6FF;"></i>';
+                        speakerBtn.onclick = async () => {
+                            try {
+                                await TTS.speak(item.cebuano, 'fil-PH', item.audioSource || '');
+                            } catch (error) {
+                                console.error('Failed to play lesson review audio:', error);
+                            }
+                        };
+
+                        card.appendChild(leftSide);
+                        card.appendChild(speakerBtn);
+                        cardsContainer.appendChild(card);
+                    });
+                }
+
+                if (typeof lucide !== 'undefined') {
+                    lucide.createIcons();
+                }
+            } catch (error) {
+                console.error('Failed to load lesson review items:', error);
+                cardsContainer.innerHTML = '';
+                const errorText = createElement('p', 'text-[#FCA5A5] text-center');
+                errorText.style.fontSize = isMobile ? '14px' : '16px';
+                errorText.textContent = 'We could not load the sample words for this lesson.';
+                cardsContainer.appendChild(errorText);
+            }
 
             if (typeof lucide !== 'undefined') {
                 lucide.createIcons();
@@ -4888,7 +5140,10 @@
             // Buttons
             const buttonContainer = createElement('div', `w-full max-w-md mx-auto space-y-3 mt-8`);
 
-            const startBtn = createButton('START LESSON', () => navigateTo('lesson-reviewer'), 'primary', true);
+            const startBtn = createButton('START LESSON', () => {
+                resetPreparedLessonQuestions();
+                navigateTo('lesson-reviewer');
+            }, 'primary', true);
             startBtn.style.height = isMobile ? '56px' : '64px';
 
             const backBtn = createButton('BACK', navigateBack, 'secondary', true);
@@ -5485,6 +5740,7 @@
                     card.onclick = () => {
                         AppState.selectedLessonId = lesson.id;
                         AppState.selectedLessonTitle = lesson.title;
+                        resetPreparedLessonQuestions();
                         navigateTo('lesson-start');
                     };
 
