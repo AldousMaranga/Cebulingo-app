@@ -3229,13 +3229,8 @@
                         ? questionText
                         : answer;
 
-                english = buildEnglishReviewDescription(englishClue, {
-                    isPhrase: isPhraseTypingQuestion || isPhrasePronunciationQuestion,
-                    isPronunciation: isPronunciationQuestion && !isPhrasePronunciationQuestion,
-                    isSpelling: isSpellingQuestion && !isPhraseTypingQuestion
-                });
-
-                english = english.trim();
+                cebuano = formatDisplayName(cebuano, cebuano).trim();
+                english = formatDisplayName(englishClue, englishClue).trim();
 
                 const dedupeKey = `${normalizeValue(cebuano)}::${normalizeValue(english)}`;
                 if (seenItems.has(dedupeKey)) {
