@@ -5804,6 +5804,22 @@
 
             buttonsContainer.appendChild(getStartedBtn);
             buttonsContainer.appendChild(loginBtn);
+
+            if (!isNativePlatform()) {
+                const downloadLink = createElement('a', 'text-center');
+                downloadLink.href = '/downloads/Cebulingo.apk';
+                downloadLink.textContent = 'Download Android APK';
+                downloadLink.setAttribute('download', 'Cebulingo.apk');
+                downloadLink.style.cssText = 'display: block; margin-top: 0.5rem; font-size: 14px; font-weight: 600; color: #8CC8FF; text-decoration: none; letter-spacing: 0.02em;';
+                downloadLink.onmouseenter = () => {
+                    downloadLink.style.color = '#B7DDFF';
+                };
+                downloadLink.onmouseleave = () => {
+                    downloadLink.style.color = '#8CC8FF';
+                };
+                buttonsContainer.appendChild(downloadLink);
+            }
+
             bottomSection.appendChild(buttonsContainer);
             screen.appendChild(bottomSection);
             container.appendChild(screen);
