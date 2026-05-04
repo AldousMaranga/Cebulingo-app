@@ -42,6 +42,7 @@
         const QUESTION_CACHE_KEY = 'lessonQuestionsCache';
         const PENDING_PROGRESS_SYNC_KEY = 'pendingProgressSync';
         const ONLINE_ACHIEVEMENTS_CACHE_KEY = 'onlineAchievementsSnapshot';
+        const LEADERBOARD_CACHE_KEY = 'leaderboardCache';
         window.CEBULINGO_AI_RECOMMENDER_URL = 'https://cebulingo-admin.vercel.app/api/recommendation';
         let nativeGoogleSignInInitPromise = null;
 
@@ -2337,7 +2338,7 @@
                 : [];
             const visiblePerformanceSummary = completedVisibleLessons ? getVisibleLessonPerformanceSummary(filteredLessons) : null;
 
-            warmLessonQuestionCache(filteredLessons).catch((error) => {
+            warmLessonQuestionCache(AppState.lessonList).catch((error) => {
                 console.error('Failed to warm offline lesson cache:', error);
             });
 
@@ -2840,6 +2841,7 @@
                 });
 
                 console.log('[Leaderboard] Parsed players preview', players.slice(0, 5));
+                saveLeaderboardPlayersCache(players);
                 return players;
             } catch (error) {
                 console.error('[Leaderboard] Fetch failed', {
@@ -2849,7 +2851,8 @@
                     stack: error?.stack || null,
                     currentUserUid: auth.currentUser?.uid || null
                 });
-                return null;
+                const cachedPlayers = getCachedLeaderboardPlayers();
+                return cachedPlayers.length ? cachedPlayers : null;
             }
         }
 
@@ -3593,6 +3596,18 @@
         function saveOnlineAchievementsSnapshot(achievements = []) {
             Storage.save(ONLINE_ACHIEVEMENTS_CACHE_KEY, {
                 achievements,
+                updatedAt: Date.now()
+            });
+        }
+
+        function getCachedLeaderboardPlayers() {
+            const cached = Storage.load(LEADERBOARD_CACHE_KEY);
+            return Array.isArray(cached?.players) ? cached.players : [];
+        }
+
+        function saveLeaderboardPlayersCache(players = []) {
+            Storage.save(LEADERBOARD_CACHE_KEY, {
+                players,
                 updatedAt: Date.now()
             });
         }
