@@ -2954,11 +2954,12 @@
                         podiumBlock.style.fontWeight = '700';
                         podiumBlock.style.color = 'white';
 
-                        const nameText = createElement('p', 'text-white text-center mt-2');
+                        const nameText = createElement('p', 'podium-name text-white text-center mt-2');
                         nameText.style.cssText = 'font-size: 14px; font-weight: 600;';
+                        nameText.title = player.isCurrentUser ? `${player.name} (You)` : player.name;
                         nameText.textContent = player.isCurrentUser ? `${player.name} (You)` : player.name;
 
-                        const xpText = createElement('p', 'text-[#6BB6FF] text-center');
+                        const xpText = createElement('p', 'podium-xp text-[#6BB6FF] text-center');
                         xpText.style.fontSize = '12px';
                         xpText.textContent = `${player.xp} XP`;
 
@@ -2987,9 +2988,10 @@
 
                     const avatar = createLeaderboardAvatar(player, 48);
 
-                    const info = createElement('div', 'flex-1');
-                    const name = createElement('p', 'text-white');
+                    const info = createElement('div', 'leaderboard-player-info flex-1');
+                    const name = createElement('p', 'leaderboard-player-name text-white');
                     name.style.cssText = 'font-size: 16px; font-weight: 600;';
+                    name.title = player.isCurrentUser ? `${player.name} (You)` : player.name;
                     name.textContent = player.isCurrentUser ? `${player.name} (You)` : player.name;
 
                     const xp = createElement('p', 'text-[#BEBEBE]');

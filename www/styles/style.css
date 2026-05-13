@@ -663,18 +663,23 @@ table tr:hover {
 
 /* Podium */
 .podium {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     align-items: flex-end;
-    justify-content: center;
-    gap: 1rem;
+    gap: 0.75rem;
     margin: 2rem 0;
+    min-height: 214px;
 }
 
 .podium-place {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.5rem;
+    justify-content: flex-end;
+    gap: 0.45rem;
+    min-width: 0;
+    height: 100%;
+    text-align: center;
 }
 
 .podium-block {
@@ -683,6 +688,7 @@ table tr:hover {
     display: flex;
     align-items: center;
     justify-content: center;
+    flex: 0 0 auto;
 }
 
 .podium-block.first {
@@ -698,6 +704,40 @@ table tr:hover {
 .podium-block.third {
     height: 70px;
     background: linear-gradient(135deg, #CD7F32 0%, #8B4513 100%);
+}
+
+.podium-name {
+    width: 100%;
+    min-height: 32px;
+    max-height: 32px;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-height: 1.12;
+    overflow-wrap: anywhere;
+}
+
+.podium-xp {
+    width: 100%;
+    min-height: 14px;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.leaderboard-player-info {
+    min-width: 0;
+}
+
+.leaderboard-player-name {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    line-height: 1.12;
 }
 
 /* Lesson Node */
@@ -1276,15 +1316,15 @@ table tr:hover {
     .podium {
         gap: 0.5rem;
         align-items: flex-end;
+        min-height: 196px;
     }
 
     .podium-place {
-        flex: 1;
         min-width: 0;
     }
 
     .podium-block {
-        width: 100%;
+        width: clamp(58px, 22vw, 72px);
         max-width: 72px;
     }
 
