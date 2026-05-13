@@ -3112,6 +3112,40 @@
             return shuffled;
         }
 
+        function resolveQuestionAudioSource(question = {}) {
+            const audioCandidates = [
+                question.audioUrl,
+                question.audioURL,
+                question.audio,
+                question.voiceUrl,
+                question.voiceURL,
+                question.soundUrl,
+                question.soundURL,
+                question.recordedAudioUrl,
+                question.recordedAudioURL,
+                question.recordedAudio,
+                question.preRecordedAudioUrl,
+                question.preRecordedAudioURL,
+                question.preRecordedAudio,
+                question.sampleAudioUrl,
+                question.sampleAudioURL,
+                question.sampleAudio,
+                question.nativeAudioUrl,
+                question.nativeAudioURL,
+                question.nativeAudio,
+                question.audioFileUrl,
+                question.audioFileURL,
+                question.audioFile,
+                question.recordingUrl,
+                question.recordingURL,
+                question.audioPath
+            ];
+
+            return audioCandidates
+                .map((value) => (value || '').toString().trim())
+                .find(Boolean) || '';
+        }
+
         function mapFirestoreQuestionToQuizQuestion(q = {}) {
             return {
                 question: q.question || '',
@@ -3124,7 +3158,7 @@
                 prompt: q.prompt || '',
                 targetText: q.targetText || '',
                 pronunciation: q.pronunciation || q.pronunciationGuide || '',
-                audioUrl: q.audioUrl || q.audioURL || q.audio || q.voiceUrl || q.voiceURL || q.soundUrl || q.soundURL || '',
+                audioUrl: resolveQuestionAudioSource(q),
                 acceptedAnswers: parseAcceptedAnswers(q.acceptedAnswers ?? q.acceptedAnswer ?? ''),
                 recognitionLang: q.recognitionLang || ''
             };
@@ -3433,7 +3467,7 @@
         }
 
         function getQuestionAudioSource(question) {
-            return question?.audioUrl || question?.audioURL || question?.audio || '';
+            return resolveQuestionAudioSource(question);
         }
 
         const AIRecommendationService = {
