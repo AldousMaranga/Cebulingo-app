@@ -375,7 +375,7 @@
 
                 return capacitor.Plugins?.TextToSpeech || null;
             },
-            async speak(text, lang = 'fil-PH', audioSource = '') {
+            async speak(text, lang = 'fil-PH', audioSource = '', options = {}) {
                 const ttsEnabled = Storage.load('ttsEnabled');
                 if (ttsEnabled === false) {
                     return false;
@@ -406,8 +406,8 @@
                         await nativePlugin.speak({
                             text,
                             lang,
-                            rate: 0.85,
-                            pitch: 1.0,
+                            rate: options.rate || 0.85,
+                            pitch: options.pitch || 1.0,
                             volume: 1.0
                         });
                         return true;
@@ -420,7 +420,8 @@
                     await new Promise((resolve, reject) => {
                         const utterance = new SpeechSynthesisUtterance(text);
                         utterance.lang = lang;
-                        utterance.rate = 0.8;
+                        utterance.rate = options.rate || 0.8;
+                        utterance.pitch = options.pitch || 1.0;
                         utterance.onend = () => resolve();
                         utterance.onerror = (event) => reject(event);
                         window.speechSynthesis.cancel();
@@ -3196,6 +3197,55 @@
             AppState.lessonData.preparedQuestions = [];
         }
 
+        const EASY_PANTIG_REVIEW_ITEMS = [
+            {
+                cebuano: 'A',
+                english: 'Start with the open Bisaya vowel sound.',
+                speechText: 'ah',
+                speechRate: 0.65
+            },
+            {
+                cebuano: 'Ba be bi bo bu',
+                english: 'Practice the B pantig sounds.',
+                speechText: 'bah, beh, bee, boh, boo',
+                speechRate: 0.65
+            },
+            {
+                cebuano: 'Ka ke ki ko ku',
+                english: 'Practice the K pantig sounds.',
+                speechText: 'ka, ke, kee, ko, ku',
+                speechRate: 0.8
+            },
+            {
+                cebuano: 'Da de di do du',
+                english: 'Practice the D pantig sounds.',
+                speechText: 'dah, deh, dee, doh, doo',
+                speechRate: 0.65
+            },
+            {
+                cebuano: 'A ba ka da',
+                english: 'Blend the first pantig sounds together.',
+                speechText: 'ah, bah, kah, dah',
+                speechRate: 0.65
+            }
+        ];
+
+        function shouldUseEasyPantigReviewItems(questions = []) {
+            const selectedLesson = getSelectedLesson();
+            const selectedLessonDifficulty = normalizeDifficulty(selectedLesson?.difficulty);
+
+            if (selectedLessonDifficulty) {
+                return selectedLessonDifficulty === 'easy';
+            }
+
+            const questionDifficulties = questions
+                .map(question => normalizeDifficulty(question?.difficulty))
+                .filter(Boolean);
+
+            return questionDifficulties.length > 0 &&
+                questionDifficulties.every(difficulty => difficulty === 'easy');
+        }
+
         function buildEnglishReviewDescription(clue = '', options = {}) {
             const sanitizedClue = (clue || '')
                 .toString()
@@ -3226,6 +3276,14 @@
         }
 
         function buildLessonReviewItems(questions = []) {
+            if (shouldUseEasyPantigReviewItems(questions)) {
+                return EASY_PANTIG_REVIEW_ITEMS.map(item => ({
+                    ...item,
+                    audioSource: '',
+                    speechLang: 'fil-PH'
+                }));
+            }
+
             const reviewItems = [];
             const seenItems = new Set();
             const maxReviewItems = 5;
@@ -5378,14 +5436,18 @@
 
             try {
                 const preparedQuestions = await ensurePreparedLessonQuestions();
+                const usesPantigReview = shouldUseEasyPantigReviewItems(preparedQuestions);
                 const reviewItems = buildLessonReviewItems(preparedQuestions);
 
+                title.textContent = usesPantigReview ? 'Practice A BA KA DA Sounds' : 'Review These Words';
                 cardsContainer.innerHTML = '';
 
                 if (!reviewItems.length) {
                     const emptyState = createElement('p', 'text-[#BEBEBE] text-center');
                     emptyState.style.fontSize = isMobile ? '14px' : '16px';
-                    emptyState.textContent = 'No sample words are available for this lesson yet.';
+                    emptyState.textContent = usesPantigReview
+                        ? 'No pantig sounds are available for this lesson yet.'
+                        : 'No sample words are available for this lesson yet.';
                     cardsContainer.appendChild(emptyState);
                 } else {
                     reviewItems.forEach(item => {
@@ -5408,7 +5470,15 @@
                         speakerBtn.innerHTML = '<i data-lucide="volume-2" style="width: 24px; height: 24px; color: #6BB6FF;"></i>';
                         speakerBtn.onclick = async () => {
                             try {
-                                await TTS.speak(item.cebuano, 'fil-PH', item.audioSource || '');
+                                await TTS.speak(
+                                    item.speechText || item.cebuano,
+                                    item.speechLang || 'fil-PH',
+                                    item.audioSource || '',
+                                    {
+                                        rate: item.speechRate || 0.8,
+                                        pitch: item.speechPitch || 1.0
+                                    }
+                                );
                             } catch (error) {
                                 console.error('Failed to play lesson review audio:', error);
                             }
