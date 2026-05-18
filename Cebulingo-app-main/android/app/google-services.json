@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "273042664545",
+    "project_id": "cebulingo-admin",
+    "storage_bucket": "cebulingo-admin.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:273042664545:android:738d1a00fd52ba87320e20",
+        "android_client_info": {
+          "package_name": "com.cebulingo.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "273042664545-366lni5jqqlruaeq9j9s9d4iv9pbt32a.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.cebulingo.app",
+            "certificate_hash": "d7a30eb02d05df1eaaa03e8a5abcc948b4528108"
+          }
+        },
+        {
+          "client_id": "273042664545-2hchdglgdgia7ve65781f93ajqbf5mm7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBQvZUMaztYhYPQc70ojAIuRM_of2ucOJI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "273042664545-2hchdglgdgia7ve65781f93ajqbf5mm7.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
